@@ -1,4 +1,4 @@
-# images-redirect-ser ice
+# images-redirect-service
 
 Cloudflare Pages project for stable branded image URLs.
 
