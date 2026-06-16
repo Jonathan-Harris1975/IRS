@@ -1,48 +1,21 @@
-# Deployment guide
+# IRS production deployment guide
 
-## Option A: Cloudflare Pages with GitHub
+**Status:** Production-controlled  
+**Last reviewed:** 16 June 2026
 
-### 1) Create the repo
-Push this project to a new GitHub repository.
+## Cloudflare Pages settings
 
-### 2) Deploy in Cloudflare Pages
-Create a Pages project from the GitHub repo.
+| Setting | Value |
+|---|---|
+| Production branch | `main` |
+| Build command | `npm ci --ignore-scripts && npm run verify` |
+| Build output directory | `public` |
+| Custom domain | `images.jonathan-harris.online` |
 
-Use:
-- Production branch: `main`
-- Build command: `exit 0`
-- Build output directory: `public`
+No runtime secrets are required. The service is static and its deployable state is fully represented by the repository.
 
-### 3) Attach the custom domain
-In the Pages project:
-- Open **Custom domains**
-- Add `images.jonathan-harris.online`
+## Validation and rollback
 
-Important:
-- Add the custom domain in the Pages dashboard first.
-- Do not just point DNS at `*.pages.dev` without associating the domain in Pages.
+Before deployment, CI validates registry parity, unique source paths, HTTPS destinations, permanent redirect codes and the health contract. After deployment, check `https://images.jonathan-harris.online/health.json` and a sample of branded URLs.
 
-### 4) DNS
-If `jonathan-harris.online` is already hosted in Cloudflare on the same account:
-- Cloudflare can add or confirm the CNAME automatically as part of Pages custom domain setup.
-
-If DNS is external:
-- Add a `CNAME` record
-- Name: `images`
-- Target: `<your-pages-project>.pages.dev`
-
-### 5) Test
-Check the root and a few redirects, for example:
-- `/site-logo`
-- `/facebook-icon`
-- a couple of book image URLs
-
-## Option B: Bulk Redirects instead of Pages
-1. Create a Bulk Redirect List in Cloudflare.
-2. Import `cloudflare-bulk-redirects-images.csv`.
-3. Create a Bulk Redirect Rule attached to that list.
-4. Ensure `images.jonathan-harris.online` resolves through Cloudflare.
-
-## Current note
-This project is aimed at website and social media image URLs only.
-Podcast and blog image systems remain separate.
+To roll back, select the previous successful Cloudflare Pages deployment or revert the offending commit. Do not edit production redirects solely in the Cloudflare dashboard, because that would create configuration drift.
