@@ -1,42 +1,35 @@
-# images-redirect-service
+> **Document status:** Production reference  
+> **Last reviewed:** 16 June 2026  
+> **Operational authority:** Current repository README, SECURITY policy and operations guide.
 
-Cloudflare Pages project for stable branded image URLs.
+# Image Redirect Service (IRS)
 
-## Purpose
-This repo replaces Short.io for website and social media image links.
-Each branded path on `images.jonathan-harris.online` redirects to the original ImageKit asset.
+IRS is the production Cloudflare Pages registry behind `images.jonathan-harris.online`. It provides stable branded paths that redirect permanently to governed ImageKit assets.
 
-## Repo structure
+## Production contract
 
-- `public/_redirects` - the live redirect rules used by Cloudflare Pages
-- `public/index.html` - minimal landing page for the root URL
-- `public/404.html` - basic fallback page
-- `cloudflare-bulk-redirects-images.csv` - optional Bulk Redirects import file
-- `data/image-url-map.json` - machine-readable map of branded paths to ImageKit URLs
+- **Runtime:** Cloudflare Pages
+- **Build command:** `npm ci --ignore-scripts && npm run verify`
+- **Build output:** `public`
+- **Health:** `GET /health.json`
+- **Redirect source:** `public/_redirects`
+- **Canonical registry:** `data/image-url-map.json`
 
-## Recommended deployment
-Use **Cloudflare Pages + GitHub**.
+Every redirect must have a unique path, an HTTPS destination, a permanent `301` status and an identical entry in the JSON registry. CI rejects drift between the two representations.
 
-### Cloudflare Pages build settings
-- **Production branch:** `main`
-- **Build command:** `exit 0`
-- **Build output directory:** `public`
+## Local verification
 
-## Suggested setup steps
-1. Create a new GitHub repo.
-2. Copy the contents of this bundle into that repo.
-3. Commit to `main`.
-4. In Cloudflare, create a new **Pages** project from the GitHub repo.
-5. Use the build settings shown above.
-6. After the first deployment succeeds, go to **Custom domains** in the Pages project.
-7. Add `images.jonathan-harris.online` there first.
-8. If `jonathan-harris.online` is already on Cloudflare in the same account, let Pages handle the DNS record.
-9. Test several image URLs before removing any legacy setup.
+```bash
+npm ci --ignore-scripts
+npm run verify
+```
 
-## DNS note
-If the `jonathan-harris.online` zone is already managed by Cloudflare in the same account, add the custom domain through the **Pages dashboard first** and let Cloudflare create or confirm the DNS automatically.
+## Release procedure
 
-If you ever need to use external DNS instead, create a `CNAME` for `images` pointing to your project’s `*.pages.dev` hostname.
+1. Update `data/image-url-map.json` and `public/_redirects` together.
+2. Run the full verification command.
+3. Open a pull request and wait for CI.
+4. Merge to `main`; Cloudflare Pages deploys the validated `public` directory.
+5. Probe `/health.json` and several representative redirects.
 
-## Fallback option
-If you decide not to use Pages for this hostname, the included CSV can be imported into **Cloudflare Bulk Redirects** instead.
+Operational detail is in [`docs/deployment-guide.md`](docs/deployment-guide.md). Security reporting is covered by [`SECURITY.md`](SECURITY.md).

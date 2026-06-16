@@ -1,0 +1,16 @@
+{
+  "name": "image-redirect-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Validated Cloudflare Pages redirect registry for branded image URLs.",
+  "scripts": {
+    "check": "node scripts/validate.mjs",
+    "test": "node --test test/*.test.mjs",
+    "verify": "npm run check && npm test"
+  },
+  "engines": {
+    "node": "22.x",
+    "npm": "10.x"
+  },
+  "packageManager": "npm@10.9.2"
+}
