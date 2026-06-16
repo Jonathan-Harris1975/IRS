@@ -1,0 +1,7 @@
+{
+  "ok": true,
+  "status": "healthy",
+  "service": "IRS",
+  "version": "1.0.0",
+  "deployment": "cloudflare-pages"
+}
