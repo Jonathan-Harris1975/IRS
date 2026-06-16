@@ -1,0 +1,26 @@
+name: Production verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run verify
+      - name: Reject committed secrets
+        run: |
+          ! grep -RIE --exclude-dir=.git --exclude='package-lock.json' \
+            '(api[_-]?key|secret[_-]?access[_-]?key|bearer[_-]?token)\s*[:=]\s*[A-Za-z0-9_./+-]{16,}' .
