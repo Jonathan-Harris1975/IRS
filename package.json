@@ -5,6 +5,8 @@
   "description": "Validated Cloudflare Pages redirect registry for branded image URLs.",
   "scripts": {
     "check": "node scripts/validate.mjs",
+    "audit:targets": "node scripts/check-targets.mjs",
+    "watch:pages": "node scripts/watch-pages-deployment.mjs",
     "test": "node --test test/*.test.mjs",
     "verify": "npm run check && npm test"
   },

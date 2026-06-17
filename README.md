@@ -33,3 +33,7 @@ npm run verify
 5. Probe `/health.json` and several representative redirects.
 
 Operational detail is in [`docs/deployment-guide.md`](docs/deployment-guide.md). Security reporting is covered by [`SECURITY.md`](SECURITY.md).
+
+## Professional operations
+
+IRS validates destination hosts, runs a scheduled broken-target audit and watches the production Cloudflare Pages deployment. Failures appear in HIVE-UI Ops independently of email. See [`docs/OPERATIONAL_ALERTING.md`](docs/OPERATIONAL_ALERTING.md).
