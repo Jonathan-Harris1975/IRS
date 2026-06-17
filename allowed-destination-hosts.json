@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "hosts": [
+    "ik.imagekit.io"
+  ],
+  "note": "Authoritative allow-list for IRS redirect destinations. Add a host only after ownership and HTTPS behaviour are reviewed."
+}
