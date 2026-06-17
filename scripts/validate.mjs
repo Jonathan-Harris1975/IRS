@@ -6,6 +6,7 @@ const root = process.cwd();
 const mapPath = path.join(root, 'data', 'image-url-map.json');
 const redirectsPath = path.join(root, 'public', '_redirects');
 const healthPath = path.join(root, 'public', 'health.json');
+const allowedHostsPath = path.join(root, 'config', 'allowed-destination-hosts.json');
 
 function fail(message) {
   console.error(`IRS validation failed: ${message}`);
@@ -13,6 +14,9 @@ function fail(message) {
 }
 
 const registry = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
+const allowedHostConfig = JSON.parse(fs.readFileSync(allowedHostsPath, 'utf8'));
+const allowedHosts = new Set(Array.isArray(allowedHostConfig?.hosts) ? allowedHostConfig.hosts : []);
+if (!allowedHosts.size) fail('config/allowed-destination-hosts.json must contain at least one approved host.');
 if (!registry || Array.isArray(registry) || typeof registry !== 'object') {
   fail('data/image-url-map.json must contain an object map.');
 }
@@ -33,6 +37,12 @@ for (const rule of rules) {
   if (seen.has(rule.source)) fail(`duplicate redirect source: ${rule.source}`);
   seen.add(rule.source);
   if (!rule.target?.startsWith('https://')) fail(`non-HTTPS target: ${rule.source}`);
+  try {
+    const targetHost = new URL(rule.target).hostname;
+    if (!allowedHosts.has(targetHost)) fail(`target host is not authorised for ${rule.source}: ${targetHost}`);
+  } catch {
+    fail(`invalid target URL: ${rule.source}`);
+  }
   if (rule.status !== '301') fail(`redirect must be permanent (301): ${rule.source}`);
 }
 
@@ -55,5 +65,5 @@ if (health.status !== 'healthy' || health.service !== 'IRS') {
 if (registryKeys.length !== rules.length) fail('redirect count does not match registry count.');
 
 if (!process.exitCode) {
-  console.log(`IRS validation passed: ${rules.length} redirects, unique HTTPS targets and a valid health contract.`);
+  console.log(`IRS validation passed: ${rules.length} redirects, unique HTTPS targets, authorised destination domains and a valid health contract.`);
 }
