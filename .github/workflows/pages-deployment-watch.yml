@@ -34,3 +34,17 @@ jobs:
           OPS_ALERT_WEBHOOK_TOKEN: ${{ secrets.OPS_ALERT_WEBHOOK_TOKEN }}
           GITHUB_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: npm run watch:pages
+      - name: Audit every authorised live redirect target
+        run: npm run audit:targets
+        env:
+          IRS_TARGET_REPORT_PATH: reports/irs-target-audit.json
+          OPS_ALERT_WEBHOOK_URL: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
+          OPS_ALERT_WEBHOOK_TOKEN: ${{ secrets.OPS_ALERT_WEBHOOK_TOKEN }}
+      - name: Upload redirect target audit
+        if: ${{ always() }}
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.2
+        with:
+          name: irs-live-target-audit-${{ github.event.workflow_run.head_sha || github.sha }}
+          path: reports/irs-target-audit.json
+          if-no-files-found: error
+          retention-days: 30
