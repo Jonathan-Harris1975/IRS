@@ -19,7 +19,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm run verify
+      - name: Run structural, contract and live-target release verification
+        run: npm run verify:release
+      - name: Retain live-target pre-release report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: irs-pre-release-target-audit-${{ github.sha }}
+          path: reports/irs-target-audit.json
+          if-no-files-found: error
+          retention-days: 90
       - name: Reject committed secrets
         run: |
           ! grep -RIE --exclude-dir=.git --exclude='package-lock.json' \
