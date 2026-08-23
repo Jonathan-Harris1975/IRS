@@ -8,7 +8,8 @@
     "audit:targets": "node scripts/check-targets.mjs",
     "watch:pages": "node scripts/watch-pages-deployment.mjs",
     "test": "node --test test/*.test.mjs",
-    "verify": "npm run check && npm test"
+    "verify": "npm run check && npm test",
+    "verify:release": "npm run verify && npm run audit:targets"
   },
   "engines": {
     "node": "22.x",
