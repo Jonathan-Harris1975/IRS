@@ -40,14 +40,22 @@ jobs:
           IRS_TARGET_REPORT_PATH: reports/irs-target-audit.json
           OPS_ALERT_WEBHOOK_URL: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
           OPS_ALERT_WEBHOOK_TOKEN: ${{ secrets.OPS_ALERT_WEBHOOK_TOKEN }}
+      - name: Record exact-SHA Pages deployment attestation
+        env:
+          DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          printf '{"repository":"%s","sha":"%s","workflow_run":"%s","service":"IRS","status":"production-deployment-and-target-audit-green"}\n' \
+            "$GITHUB_REPOSITORY" "$DEPLOYED_SHA" "$GITHUB_RUN_ID" > reports/deployment-attestation.json
       - name: Upload redirect target audit
         if: ${{ always() }}
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.2
         with:
           name: irs-live-target-audit-${{ github.event.workflow_run.head_sha || github.sha }}
-          path: reports/irs-target-audit.json
+          path: |
+            reports/irs-target-audit.json
+            reports/deployment-attestation.json
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
       - name: Trigger central ecosystem smoke when cross-repository dispatch is configured
         env:
           ECOSYSTEM_SMOKE_DISPATCH_TOKEN: ${{ secrets.ECOSYSTEM_SMOKE_DISPATCH_TOKEN }}
