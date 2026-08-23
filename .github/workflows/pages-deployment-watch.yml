@@ -48,14 +48,17 @@ jobs:
           path: reports/irs-target-audit.json
           if-no-files-found: error
           retention-days: 30
-      - name: Trigger central ecosystem smoke
+      - name: Trigger central ecosystem smoke when cross-repository dispatch is configured
         env:
           ECOSYSTEM_SMOKE_DISPATCH_TOKEN: ${{ secrets.ECOSYSTEM_SMOKE_DISPATCH_TOKEN }}
           ECOSYSTEM_SMOKE_REPOSITORY: ${{ vars.ECOSYSTEM_SMOKE_REPOSITORY }}
           SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           set -euo pipefail
-          test -n "${ECOSYSTEM_SMOKE_DISPATCH_TOKEN:-}" || { echo "ECOSYSTEM_SMOKE_DISPATCH_TOKEN is required" >&2; exit 1; }
+          if [ -z "${ECOSYSTEM_SMOKE_DISPATCH_TOKEN:-}" ]; then
+            echo "::warning::ECOSYSTEM_SMOKE_DISPATCH_TOKEN is not configured in IRS; deployment and redirect-target verification are complete, but the optional cross-repository MAST dispatch was skipped."
+            exit 0
+          fi
           target="${ECOSYSTEM_SMOKE_REPOSITORY:-${GITHUB_REPOSITORY_OWNER}/MAST}"
           payload="$(jq -cn --arg ref main --arg repo "$GITHUB_REPOSITORY" --arg sha "$SOURCE_SHA" '{ref:$ref,inputs:{source_repository:$repo,source_sha:$sha}}')"
           curl --fail-with-body --silent --show-error \
