@@ -1,6 +1,0 @@
-Delete this repository file:
-
-image-url-map.json
-
-The canonical registry remains at data/image-url-map.json. The deleted root file
-was an unused byte-for-byte duplicate and was the sole duplicate-content group.
