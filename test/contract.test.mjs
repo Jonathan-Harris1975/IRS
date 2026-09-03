@@ -15,3 +15,8 @@ test('headers prevent caching and indexing of health response', () => {
   assert.match(headers, /Cache-Control:\s*no-store/i);
   assert.match(headers, /X-Robots-Tag:\s*noindex/i);
 });
+
+test('redirect registry has one canonical source', () => {
+  assert.equal(fs.existsSync('data/image-url-map.json'), true);
+  assert.equal(fs.existsSync('image-url-map.json'), false);
+});
