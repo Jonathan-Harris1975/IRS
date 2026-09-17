@@ -4,24 +4,52 @@ on:
   push:
     branches: [main]
   pull_request:
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   verify:
+    name: Deterministic repository verification
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: 22.23.2
           cache: npm
-      - run: npm ci --ignore-scripts
-      - name: Run structural, contract and live-target release verification
-        run: npm run verify:release
-      - name: Retain live-target pre-release report
+      - name: Verify pinned Node/npm toolchain
+        run: |
+          test "$(node --version)" = "v22.23.2"
+          test "$(npm --version)" = "10.9.8"
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run structural and contract verification
+        run: npm run verify
+      - name: Reject committed secrets
+        run: |
+          ! grep -RIE --exclude-dir=.git --exclude='package-lock.json' \
+            '(api[_-]?key|secret[_-]?access[_-]?key|bearer[_-]?token)\s*[:=]\s*[A-Za-z0-9_./+-]{16,}' .
+
+  live_target_audit:
+    name: Live redirect target audit
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - name: Verify pinned Node/npm toolchain
+        run: |
+          test "$(node --version)" = "v22.23.2"
+          test "$(npm --version)" = "10.9.8"
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Audit live redirect targets
+        env:
+          IRS_TARGET_REPORT_PATH: reports/irs-target-audit.json
+        run: npm run audit:targets
+      - name: Retain live-target report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -29,15 +57,11 @@ jobs:
           path: reports/irs-target-audit.json
           if-no-files-found: error
           retention-days: 90
-      - name: Reject committed secrets
-        run: |
-          ! grep -RIE --exclude-dir=.git --exclude='package-lock.json' \
-            '(api[_-]?key|secret[_-]?access[_-]?key|bearer[_-]?token)\s*[:=]\s*[A-Za-z0-9_./+-]{16,}' .
 
   notify_failure:
     name: Notify central operations on CI failure
-    needs: [verify]
-    if: ${{ always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
+    needs: [verify, live_target_audit]
+    if: ${{ always() && (needs.verify.result == 'failure' || needs.verify.result == 'cancelled' || needs.live_target_audit.result == 'failure' || needs.live_target_audit.result == 'cancelled') }}
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -58,17 +82,23 @@ jobs:
 
   release_gate:
     name: Release gate (exact SHA)
-    needs: [verify]
+    needs: [verify, live_target_audit]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - name: Require all release checks to be green
+      - name: Require deterministic checks and any applicable live audit
         env:
           RESULT_VERIFY: ${{ needs.verify.result }}
+          RESULT_LIVE: ${{ needs.live_target_audit.result }}
         run: |
           test "$RESULT_VERIFY" = "success"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            test "$RESULT_LIVE" = "skipped"
+          else
+            test "$RESULT_LIVE" = "success"
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Assert checked-out commit is the workflow SHA
         run: |
@@ -80,4 +110,3 @@ jobs:
           name: release-attestation-${{ github.sha }}
           path: release-attestation.json
           retention-days: 90
-
