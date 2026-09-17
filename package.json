@@ -8,8 +8,9 @@
     "audit:targets": "node scripts/check-targets.mjs",
     "watch:pages": "node scripts/watch-pages-deployment.mjs",
     "test": "node --test test/*.test.mjs",
-    "verify": "npm run check && npm test",
-    "verify:release": "npm run verify && npm run audit:targets"
+    "verify": "npm run lint && npm run check && npm test",
+    "verify:release": "npm run verify && npm run audit:targets",
+    "lint": "node scripts/lint.mjs"
   },
   "engines": {
     "node": "22.23.2",
