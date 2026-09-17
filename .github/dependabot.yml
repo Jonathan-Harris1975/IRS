@@ -1,12 +1,7 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps"
-
+  # There are currently no npm dependencies; GitHub Actions are the active
+  # dependency-update surface. Re-add npm when application packages exist.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
