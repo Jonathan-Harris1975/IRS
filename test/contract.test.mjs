@@ -21,6 +21,15 @@ test('redirect registry has one canonical source', () => {
   assert.equal(fs.existsSync('image-url-map.json'), false);
 });
 
+test('CI uses the dedicated secret scanner instead of the legacy grep gate', () => {
+  const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
+  const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  assert.match(packageJson.scripts['scan:secrets'], /scripts\/secret-scan\.mjs/);
+  assert.match(packageJson.scripts.verify, /npm run scan:secrets/);
+  assert.match(workflow, /run:\s*npm run verify/);
+  assert.doesNotMatch(workflow, /grep\s+-RIE|Reject committed secrets/);
+});
+
 test('release gate requires deterministic verification and the live target audit', () => {
   const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
   assert.match(workflow, /live_target_audit:/);
