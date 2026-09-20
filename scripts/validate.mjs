@@ -36,6 +36,7 @@ const seen = new Set();
 const seenCaseFolded = new Map();
 for (const rule of rules) {
   if (!rule.source?.startsWith('/')) fail(`invalid source path: ${rule.source}`);
+  if (rule.source.includes('?') || rule.source.includes('#')) fail(`query strings/fragments are forbidden in redirect sources: ${rule.source}`);
   if (rule.source.includes('*') || /(^|\/):[A-Za-z]/.test(rule.source)) {
     fail(`dynamic redirect sources are not permitted: ${rule.source}`);
   }
