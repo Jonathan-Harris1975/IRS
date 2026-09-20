@@ -65,5 +65,5 @@ if (health.status !== 'healthy' || health.service !== 'IRS') {
 if (registryKeys.length !== rules.length) fail('redirect count does not match registry count.');
 
 if (!process.exitCode) {
-  console.log(`IRS validation passed: ${rules.length} redirects, unique HTTPS targets, authorised destination domains and a valid health contract.`);
+  console.log(`IRS validation passed: ${rules.length} redirects, unique source paths, HTTPS targets, authorised destination domains and a valid health contract.`);
 }
