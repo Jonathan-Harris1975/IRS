@@ -22,7 +22,7 @@ npm run verify
 npm run verify:release
 ```
 
-`npm run audit:targets` checks configured redirect destinations. CI runs it as part of `verify:release` before the exact-SHA release gate and retains the resulting JSON report for 90 days. `npm run watch:pages` provides deployment monitoring used by the operations workflow.
+`npm run audit:targets` checks configured redirect destinations. In CI, deterministic `npm run verify` and live `npm run audit:targets` run as separate release-gating jobs; the exact-SHA release gate requires both, and the live-target JSON report is retained for 90 days. `npm run watch:pages` provides deployment monitoring used by the operations workflow.
 
 ## Change workflow
 
