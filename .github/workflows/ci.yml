@@ -23,12 +23,8 @@ jobs:
           test "$(node --version)" = "v22.23.2"
           test "$(npm --version)" = "10.9.8"
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Run structural and contract verification
+      - name: Run committed-secret and repository verification
         run: npm run verify
-      - name: Reject committed secrets
-        run: |
-          ! grep -RIE --exclude-dir=.git --exclude='package-lock.json' \
-            '(api[_-]?key|secret[_-]?access[_-]?key|bearer[_-]?token)\s*[:=]\s*[A-Za-z0-9_./+-]{16,}' .
 
   live_target_audit:
     name: Live redirect target audit
