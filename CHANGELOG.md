@@ -6,6 +6,9 @@
 
 ## Unreleased — 20 September 2026
 
+- Replaced the narrow CI secret grep with a repository-local, redacting secret scanner covering private keys, GitHub/AWS tokens, bearer/JWT credentials, webhook/URL credentials and high-confidence credential assignments.
+- Added exact fingerprint-based synthetic/test-vector allow-listing plus deterministic scanner tests for detection, redaction, safe placeholders, narrow exceptions and whole-repository cleanliness.
+- Reconciled README, security, deployment and operations documentation with the dedicated scanner and local/CI execution path.
 - Increased external redirect-target auditing from weekly to daily at 06:17 UTC while preserving manual and deployment-related validation.
 - Added scheduled-workflow concurrency controls plus explicit bounded target concurrency and request/workflow timeouts.
 - Added a compact persistent target-audit status artifact with last-completed, last-successful, result, checked/failing counts and a 36-hour staleness rule.

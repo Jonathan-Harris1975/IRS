@@ -27,3 +27,11 @@ Changes to `config/allowed-destination-hosts.json` alter the service's external 
 Read-only permissions are the default for verification and scheduled target-audit workflows. The scheduled audit requires `actions: read` only to retrieve the previous compact status artifact. It does not write generated status back to the repository.
 
 Operational webhook and Cloudflare API credentials are supplied through GitHub Actions secrets. Scripts do not print secret values or response bodies. Keep these credentials scoped to the minimum actions documented in the operations guide.
+## Committed-secret prevention
+
+`npm run scan:secrets` is the authoritative repository secret gate and is also executed by `npm run verify` in CI. The repository-local scanner detects high-confidence private-key, GitHub-token, AWS access-key, bearer/JWT, webhook, embedded URL-credential and password/API-token/secret assignment patterns. Scanner findings never print the complete credential value.
+
+Synthetic fixtures and pre-existing security test vectors may be excepted only through `config/secret-scan-allowlist.json`. Each entry must identify one repository-relative file, one detector and the exact SHA-256 fingerprint of the synthetic value, with a documented reason. Stale allow-list entries fail the scan. Broad directory exclusions and real credential exceptions are not permitted.
+
+The scanner intentionally skips only `.git`, installed `node_modules` and binary files. Generated test/audit output is not broadly exempted. No real secret should ever be committed, even temporarily.
+

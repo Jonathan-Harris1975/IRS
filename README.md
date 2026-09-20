@@ -52,10 +52,15 @@ Use the pinned Node/npm versions from `package.json` in CI and release work.
 
 ```bash
 npm ci --ignore-scripts
+npm run scan:secrets
 npm run verify
 ```
 
-`npm run verify` is deterministic and does not require live downstream availability. It runs linting, redirect validation and the complete test suite.
+`npm run scan:secrets` runs the repository-local committed-secret scanner. It checks text files for private-key blocks, GitHub-style tokens, AWS access-key IDs, bearer/JWT credentials, credential-bearing webhook URLs, embedded URL credentials and high-confidence password/API-token/secret assignments. Findings are reported with the credential value redacted.
+
+The scanner uses `config/secret-scan-allowlist.json` only for exact synthetic/test vectors. Each exception is bound to the repository-relative path, detector type and SHA-256 fingerprint of the synthetic value, and stale exceptions fail the scan. Do not allow-list real credentials or broad directories.
+
+`npm run verify` is deterministic and does not require live downstream availability. It includes the committed-secret gate, linting, redirect validation and the complete test suite.
 
 Before a production release, also run the live target audit:
 
@@ -69,7 +74,7 @@ The live audit report is written to `reports/irs-target-audit.json`; the compact
 
 1. Update `data/image-url-map.json` and `public/_redirects` together.
 2. Add a destination host to `config/allowed-destination-hosts.json` only after ownership/trust and HTTPS behaviour are reviewed.
-3. Run `npm run verify` while editing.
+3. Run `npm run verify` while editing; this includes the committed-secret gate.
 4. Run `npm run verify:release` before production release.
 5. Use the normal pull-request/CI route. CI independently re-probes every governed destination before the exact-SHA release gate.
 6. Cloudflare Pages publishes `public/` from `main` after the configured production checks.
