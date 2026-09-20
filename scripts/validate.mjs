@@ -7,6 +7,7 @@ const mapPath = path.join(root, 'data', 'image-url-map.json');
 const redirectsPath = path.join(root, 'public', '_redirects');
 const healthPath = path.join(root, 'public', 'health.json');
 const allowedHostsPath = path.join(root, 'config', 'allowed-destination-hosts.json');
+const productionHost = 'images.jonathan-harris.online';
 
 function fail(message) {
   console.error(`IRS validation failed: ${message}`);
@@ -32,14 +33,27 @@ const rules = fs.readFileSync(redirectsPath, 'utf8')
   });
 
 const seen = new Set();
+const seenCaseFolded = new Map();
 for (const rule of rules) {
   if (!rule.source?.startsWith('/')) fail(`invalid source path: ${rule.source}`);
+  if (rule.source.includes('*') || /(^|\/):[A-Za-z]/.test(rule.source)) {
+    fail(`dynamic redirect sources are not permitted: ${rule.source}`);
+  }
   if (seen.has(rule.source)) fail(`duplicate redirect source: ${rule.source}`);
+  const caseFoldedSource = rule.source.toLowerCase();
+  const caseCollision = seenCaseFolded.get(caseFoldedSource);
+  if (caseCollision && caseCollision !== rule.source) {
+    fail(`case-only redirect source collision: ${caseCollision} and ${rule.source}`);
+  }
   seen.add(rule.source);
+  seenCaseFolded.set(caseFoldedSource, rule.source);
   if (!rule.target?.startsWith('https://')) fail(`non-HTTPS target: ${rule.source}`);
   try {
-    const targetHost = new URL(rule.target).hostname;
+    const targetUrl = new URL(rule.target);
+    const targetHost = targetUrl.hostname;
+    if (targetUrl.username || targetUrl.password) fail(`credentials are forbidden in target URL: ${rule.source}`);
     if (!allowedHosts.has(targetHost)) fail(`target host is not authorised for ${rule.source}: ${targetHost}`);
+    if (targetHost === productionHost) fail(`redirect loop through the IRS production host: ${rule.source}`);
   } catch {
     fail(`invalid target URL: ${rule.source}`);
   }
@@ -47,6 +61,7 @@ for (const rule of rules) {
 }
 
 const registryKeys = Object.keys(registry);
+if (!registryKeys.length) fail('redirect registry must contain at least one redirect.');
 for (const [source, target] of Object.entries(registry)) {
   if (!source.startsWith('/')) fail(`registry key must begin with /: ${source}`);
   if (typeof target !== 'string' || !target.startsWith('https://')) fail(`invalid registry target: ${source}`);

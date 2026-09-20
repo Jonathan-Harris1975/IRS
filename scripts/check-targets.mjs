@@ -3,12 +3,18 @@ import path from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { sendOpsEvent } from './send-ops-event.mjs';
+import { buildTargetAuditStatus } from './target-audit-status.mjs';
 
 const root = process.cwd();
 const registry = JSON.parse(fs.readFileSync(path.join(root, 'data', 'image-url-map.json'), 'utf8'));
 const allowedHostConfig = JSON.parse(fs.readFileSync(path.join(root, 'config', 'allowed-destination-hosts.json'), 'utf8'));
 const allowedHosts = new Set(Array.isArray(allowedHostConfig?.hosts) ? allowedHostConfig.hosts : []);
 const outputPath = path.resolve(process.env.IRS_TARGET_REPORT_PATH || path.join(root, 'reports', 'irs-target-audit.json'));
+const statusPath = path.resolve(process.env.IRS_TARGET_STATUS_PATH || path.join(root, 'reports', 'irs-target-status.json'));
+const previousStatusPath = process.env.IRS_PREVIOUS_STATUS_PATH
+  ? path.resolve(process.env.IRS_PREVIOUS_STATUS_PATH)
+  : null;
+const stalenessThresholdHours = Number(process.env.IRS_TARGET_STALENESS_HOURS || 36);
 const timeoutMs = Math.max(1000, Number(process.env.IRS_TARGET_TIMEOUT_MS || 12000));
 const concurrency = Math.max(1, Math.min(12, Number(process.env.IRS_TARGET_CONCURRENCY || 6)));
 const signatureBytes = Math.max(32, Math.min(4096, Number(process.env.IRS_TARGET_SIGNATURE_BYTES || 512)));
@@ -20,7 +26,7 @@ if (!allowedHosts.size) {
 function isAuthorisedUrl(value) {
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && allowedHosts.has(url.hostname);
+    return url.protocol === 'https:' && !url.username && !url.password && allowedHosts.has(url.hostname);
   } catch {
     return false;
   }
@@ -89,7 +95,20 @@ async function readPrefix(response) {
   return output;
 }
 
+function readPreviousStatus() {
+  if (!previousStatusPath || !fs.existsSync(previousStatusPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(previousStatusPath, 'utf8'));
+  } catch (error) {
+    console.warn(`IRS previous target-audit status could not be read: ${error?.name || 'Error'}`);
+    return null;
+  }
+}
+
 async function probe(source, target) {
+  if (!isAuthorisedUrl(target)) {
+    return { source, ok: false, status: null, reason: 'unauthorised-configured-target', latencyMs: 0 };
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const startedAt = Date.now();
@@ -121,7 +140,7 @@ async function probe(source, target) {
       target,
       ok,
       status: response.status,
-      finalUrl: response.url,
+      finalUrl: finalHostAuthorised ? response.url : null,
       finalHostAuthorised,
       contentType,
       contentLength,
@@ -171,32 +190,62 @@ async function main() {
     failures,
     results,
   };
+  const status = buildTargetAuditStatus({
+    completedAt: report.generatedAt,
+    checked: report.checked,
+    failed: report.failed,
+    previousStatus: readPreviousStatus(),
+    thresholdHours: stalenessThresholdHours,
+  });
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.mkdirSync(path.dirname(statusPath), { recursive: true });
   fs.writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`);
+  fs.writeFileSync(statusPath, `${JSON.stringify(status, null, 2)}\n`);
   console.log(`IRS target audit checked ${report.checked} targets: ${report.healthy} healthy, ${report.failed} failed.`);
+
+  const runUrl = process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
+    ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+    : null;
+  const eventBase = {
+    event_id: `irs:target-audit:${process.env.GITHUB_RUN_ID || report.generatedAt}`,
+    release_id: process.env.GITHUB_SHA || null,
+    url: runUrl,
+    details: {
+      checked: status.targetsChecked,
+      failed: status.targetsFailing,
+      lastCompletedAt: status.lastCompletedAt,
+      lastSuccessfulAt: status.lastSuccessfulAt,
+      staleAfter: status.staleness.staleAfter,
+    },
+  };
+
   if (failures.length) {
     await sendOpsEvent({
-      event_id: `irs:target-audit:${process.env.GITHUB_RUN_ID || report.generatedAt}`,
+      ...eventBase,
       severity: 'critical',
       event_type: 'broken_redirect_targets',
       title: 'IRS redirect target audit failed',
       summary: `${failures.length} of ${results.length} authorised redirect targets failed HTTP, host, MIME, payload or image-signature validation.`,
-      release_id: process.env.GITHUB_SHA || null,
-      url: process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
-        ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
-        : null,
       details: {
-        failed: failures.length,
-        checked: results.length,
+        ...eventBase.details,
         failures: failures.slice(0, 10).map((item) => ({ source: item.source, reason: item.reason || item.error || 'unknown' })),
       },
     });
-    process.exitCode = 1;
+    return 1;
+  } else {
+    await sendOpsEvent({
+      ...eventBase,
+      severity: 'info',
+      event_type: 'redirect_target_audit_completed',
+      title: 'IRS redirect target audit passed',
+      summary: `All ${results.length} authorised redirect targets passed live validation.`,
+    });
   }
+  return 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  await main();
+  process.exit(await main());
 }
 
 export { declaredLength, isAuthorisedUrl, isImageContentType, looksLikeImage };
