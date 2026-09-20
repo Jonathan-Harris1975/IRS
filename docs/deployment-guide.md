@@ -20,11 +20,14 @@ Run:
 
 ```bash
 npm ci --ignore-scripts
+npm run scan:secrets
 npm run verify
 npm run audit:targets
 ```
 
-`npm run verify` validates registry parity, unique exact source paths, HTTPS-only destinations, the approved host allow-list, absence of embedded destination credentials, permanent `301` status, loop prevention and the static health contract.
+`npm run scan:secrets` is the local committed-secret check. `npm run verify` invokes the same scanner before validating registry parity, unique exact source paths, HTTPS-only destinations, the approved host allow-list, absence of embedded destination credentials, permanent `301` status, loop prevention, the static health contract and the automated tests.
+
+Synthetic scanner fixtures are excepted only by exact path + detector + SHA-256 fingerprint entries in `config/secret-scan-allowlist.json`; stale entries fail verification. Never use an allow-list entry for a real credential.
 
 `npm run audit:targets` is a separate live dependency check. It follows the destination response and verifies that the final URL remains on an authorised HTTPS host and returns a non-empty image payload with an image MIME type and recognised signature.
 
@@ -58,7 +61,7 @@ The compact status is intentionally not committed into `public/` or `main`; this
 
 ## Failure and recovery
 
-If deterministic validation fails, do not deploy the registry change. Correct the mapping/configuration and rerun `npm run verify`.
+If the committed-secret scan or deterministic validation fails, do not deploy the registry change. Remove/rotate any genuine exposed credential, correct the mapping/configuration as applicable, and rerun `npm run verify`.
 
 If the live target audit fails, inspect the detailed report. Resolve the downstream asset or governed redirect target, then rerun `npm run audit:targets` or manually dispatch the scheduled workflow. The compact status preserves the previous `lastSuccessfulAt` across completed failures.
 

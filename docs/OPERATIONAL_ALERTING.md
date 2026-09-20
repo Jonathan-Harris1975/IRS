@@ -117,7 +117,7 @@ The optional ecosystem smoke dispatch additionally uses `ECOSYSTEM_SMOKE_DISPATC
 
 1. Add or change the redirect in both registry representations.
 2. Add a new destination host to the allow-list only after ownership and HTTPS behaviour are reviewed.
-3. Run `npm run verify`.
+3. Run `npm run verify`; this includes the dedicated committed-secret scanner and deterministic redirect/test gates.
 4. Run `npm run audit:targets` for a live destination check.
 5. Merge through normal CI and confirm the Cloudflare deployment event in operations monitoring.
 6. Confirm a fresh compact target-audit status exists after deployment/scheduled validation.
