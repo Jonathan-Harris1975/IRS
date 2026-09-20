@@ -2,11 +2,16 @@ name: IRS scheduled target audit
 
 on:
   schedule:
-    - cron: '17 6 * * 1'
+    - cron: '17 6 * * *'
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
+
+concurrency:
+  group: irs-scheduled-target-audit
+  cancel-in-progress: false
 
 jobs:
   audit:
@@ -23,16 +28,87 @@ jobs:
           test "$(node --version)" = "v22.23.2"
           test "$(npm --version)" = "10.9.8"
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Probe all authorised redirect targets
+
+      - name: Restore previous target-audit status
+        id: previous_status
         env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports/previous
+          if ! artifact_url="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=irs-target-status&per_page=100" \
+            --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].archive_download_url // empty')"; then
+            echo "::warning::Previous target-audit status could not be listed; this audit will continue without history."
+            exit 0
+          fi
+          if [ -z "$artifact_url" ]; then
+            echo "No previous target-audit status artifact exists yet."
+            exit 0
+          fi
+          if ! curl --fail --location --silent --show-error \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "$artifact_url" --output /tmp/irs-target-status.zip; then
+            echo "::warning::Previous target-audit status could not be downloaded; this audit will continue without history."
+            exit 0
+          fi
+          if ! unzip -q /tmp/irs-target-status.zip -d reports/previous; then
+            echo "::warning::Previous target-audit status archive could not be read; this audit will continue without history."
+            exit 0
+          fi
+          previous_path="$(find reports/previous -type f -name 'irs-target-status.json' -print -quit)"
+          if [ -n "$previous_path" ]; then
+            cp "$previous_path" reports/previous-target-status.json
+            echo "path=reports/previous-target-status.json" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Probe all authorised redirect targets
+        id: target_audit
+        continue-on-error: true
+        env:
+          IRS_PREVIOUS_STATUS_PATH: ${{ steps.previous_status.outputs.path }}
+          IRS_TARGET_CONCURRENCY: '4'
+          IRS_TARGET_TIMEOUT_MS: '12000'
+          IRS_TARGET_STALENESS_HOURS: '36'
           OPS_ALERT_WEBHOOK_URL: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
           OPS_ALERT_WEBHOOK_TOKEN: ${{ secrets.OPS_ALERT_WEBHOOK_TOKEN }}
         run: npm run audit:targets
-      - name: Retain the audit report
+
+      - name: Publish target-audit summary
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -f reports/irs-target-status.json ]; then
+            echo "### IRS target audit" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Status document was not produced; treat this run as failed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "### IRS target audit"
+            jq -r '"- Result: `\(.result)`\n- Targets checked: \(.targetsChecked)\n- Targets failing: \(.targetsFailing)\n- Last completed: `\(.lastCompletedAt)`\n- Last successful: `\(.lastSuccessfulAt // "never")`\n- Stale after: `\(.staleness.staleAfter)`"' reports/irs-target-status.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain persistent target-audit status
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: irs-target-status
+          path: reports/irs-target-status.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Retain detailed target-audit report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: irs-target-audit-${{ github.run_id }}
           path: reports/irs-target-audit.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
+
+      - name: Enforce target-audit result
+        if: always()
+        env:
+          AUDIT_OUTCOME: ${{ steps.target_audit.outcome }}
+        run: test "$AUDIT_OUTCOME" = "success"
