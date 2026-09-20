@@ -1,0 +1,5 @@
+API_KEY=example
+password=changeme
+client_secret=placeholder-value
+OPS_ALERT_WEBHOOK_TOKEN=${OPS_ALERT_WEBHOOK_TOKEN}
+CF_PAGES_API_TOKEN=process.env.CF_PAGES_API_TOKEN
