@@ -6,6 +6,7 @@ test('final target URL must remain HTTPS on the authorised host', () => {
   assert.equal(isAuthorisedUrl('https://ik.imagekit.io/7lx48g355/example.webp'), true);
   assert.equal(isAuthorisedUrl('http://ik.imagekit.io/7lx48g355/example.webp'), false);
   assert.equal(isAuthorisedUrl('https://example.com/example.webp'), false);
+  assert.equal(isAuthorisedUrl('https://user:secret@ik.imagekit.io/7lx48g355/example.webp'), false);
 });
 
 test('target MIME type must be an image', () => {

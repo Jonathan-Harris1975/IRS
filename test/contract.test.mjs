@@ -27,3 +27,22 @@ test('release gate requires deterministic verification and the live target audit
   assert.match(workflow, /run:\s*npm run audit:targets/);
   assert.match(workflow, /release_gate:[\s\S]*?needs:\s*\[verify,\s*live_target_audit\]/);
 });
+
+
+test('scheduled target audit is daily, serialised and persists a freshness signal', () => {
+  const workflow = fs.readFileSync('.github/workflows/target-audit.yml', 'utf8');
+  assert.match(workflow, /cron:\s*['"]17 6 \* \* \*['"]/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /concurrency:[\s\S]*?group:\s*irs-scheduled-target-audit/);
+  assert.match(workflow, /IRS_TARGET_TIMEOUT_MS:\s*['"]12000['"]/);
+  assert.match(workflow, /IRS_TARGET_CONCURRENCY:\s*['"]4['"]/);
+  assert.match(workflow, /name:\s*irs-target-status/);
+  assert.match(workflow, /retention-days:\s*90/);
+});
+
+test('static liveness remains independent from target-audit status', () => {
+  const health = JSON.parse(fs.readFileSync('public/health.json', 'utf8'));
+  assert.equal(health.status, 'healthy');
+  assert.equal('targetAudit' in health, false);
+  assert.equal(fs.existsSync('public/irs-target-status.json'), false);
+});
