@@ -20,3 +20,10 @@ test('redirect registry has one canonical source', () => {
   assert.equal(fs.existsSync('data/image-url-map.json'), true);
   assert.equal(fs.existsSync('image-url-map.json'), false);
 });
+
+test('release gate requires deterministic verification and the live target audit', () => {
+  const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
+  assert.match(workflow, /live_target_audit:/);
+  assert.match(workflow, /run:\s*npm run audit:targets/);
+  assert.match(workflow, /release_gate:[\s\S]*?needs:\s*\[verify,\s*live_target_audit\]/);
+});
