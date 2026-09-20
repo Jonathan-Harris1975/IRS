@@ -34,6 +34,7 @@ jobs:
     name: Live redirect target audit
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -48,13 +49,18 @@ jobs:
       - name: Audit live redirect targets
         env:
           IRS_TARGET_REPORT_PATH: reports/irs-target-audit.json
+          IRS_TARGET_CONCURRENCY: '4'
+          IRS_TARGET_TIMEOUT_MS: '12000'
+          IRS_TARGET_STALENESS_HOURS: '36'
         run: npm run audit:targets
       - name: Retain live-target report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: irs-pre-release-target-audit-${{ github.sha }}
-          path: reports/irs-target-audit.json
+          path: |
+            reports/irs-target-audit.json
+            reports/irs-target-status.json
           if-no-files-found: error
           retention-days: 90
 
