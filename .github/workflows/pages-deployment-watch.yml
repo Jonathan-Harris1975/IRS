@@ -36,14 +36,19 @@ jobs:
           CF_PAGES_PROJECT_NAME: ${{ secrets.CF_PAGES_PROJECT_NAME }}
           CF_PAGES_API_TOKEN: ${{ secrets.CF_PAGES_API_TOKEN }}
         run: |
-          if [ -n "${CF_ACCOUNT_ID:-}" ] && [ -n "${CF_PAGES_PROJECT_NAME:-}" ] && [ -n "${CF_PAGES_API_TOKEN:-}" ]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Cloudflare Pages deployment watcher is not configured; exact-SHA deployment attestation and downstream smoke dispatch are skipped."
+          set -euo pipefail
+          missing=()
+          for name in CF_ACCOUNT_ID CF_PAGES_PROJECT_NAME CF_PAGES_API_TOKEN; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Cloudflare Pages deployment verification cannot run. Missing required configuration: %s\n' "${missing[*]}"
+            exit 1
           fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
       - name: Watch the production Pages deployment
-        if: steps.pages_config.outputs.configured == 'true'
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_PAGES_PROJECT_NAME: ${{ secrets.CF_PAGES_PROJECT_NAME }}
@@ -59,7 +64,6 @@ jobs:
           OPS_ALERT_WEBHOOK_URL: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
           OPS_ALERT_WEBHOOK_TOKEN: ${{ secrets.OPS_ALERT_WEBHOOK_TOKEN }}
       - name: Record exact-SHA Pages deployment attestation
-        if: steps.pages_config.outputs.configured == 'true'
         env:
           DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
@@ -76,7 +80,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
       - name: Trigger central ecosystem smoke when cross-repository dispatch is configured
-        if: steps.pages_config.outputs.configured == 'true'
         env:
           ECOSYSTEM_SMOKE_DISPATCH_TOKEN: ${{ secrets.ECOSYSTEM_SMOKE_DISPATCH_TOKEN }}
           ECOSYSTEM_SMOKE_REPOSITORY: ${{ vars.ECOSYSTEM_SMOKE_REPOSITORY }}
