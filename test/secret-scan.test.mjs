@@ -14,9 +14,17 @@ const allowlist = loadAllowlist(path.join(root, 'config', 'secret-scan-allowlist
 test('secret scanner detects representative synthetic credentials', () => {
   const { findings } = scanText(syntheticFixture, syntheticFixturePath, []);
   const detectors = new Set(findings.map((finding) => finding.detector));
-  for (const detector of ['private-key', 'github-token', 'aws-access-key-id', 'bearer-token', 'credential-assignment']) {
+  for (const detector of ['github-token', 'aws-access-key-id', 'bearer-token', 'credential-assignment']) {
     assert.equal(detectors.has(detector), true, `expected ${detector} detection`);
   }
+});
+
+test('secret scanner detects private-key material without committing a key-shaped fixture', () => {
+  const boundary = ['PRIVATE', 'KEY'].join(' ');
+  const body = 'A'.repeat(48);
+  const syntheticPrivateKey = [`-----BEGIN ${boundary}-----`, body, `-----END ${boundary}-----`].join('\n');
+  const { findings } = scanText(syntheticPrivateKey, '<generated-private-key-test>', []);
+  assert.equal(findings.some((finding) => finding.detector === 'private-key'), true);
 });
 
 test('safe placeholders are not rejected', () => {
@@ -27,7 +35,7 @@ test('safe placeholders are not rejected', () => {
 test('documented synthetic fixture can be narrowly allow-listed', () => {
   const { findings, allowlistHits } = scanText(syntheticFixture, syntheticFixturePath, allowlist);
   assert.deepEqual(findings, []);
-  assert.equal(allowlistHits.size >= 5, true);
+  assert.equal(allowlistHits.size, 4);
 });
 
 test('allow-listing one fixture does not suppress an unrelated credential', () => {
