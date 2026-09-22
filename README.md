@@ -78,6 +78,9 @@ The live audit report is written to `reports/irs-target-audit.json`; the compact
 4. Run `npm run verify:release` before production release.
 5. Use the normal pull-request/CI route. CI independently re-probes every governed destination before the exact-SHA release gate.
 6. Cloudflare Pages publishes `public/` from `main` after the configured production checks.
-7. After deployment, confirm `/health.json`, representative redirects, the deployment watcher and the latest target-audit status.
+7. The post-release workflow requires `CF_ACCOUNT_ID`, `CF_PAGES_PROJECT_NAME` and `CF_PAGES_API_TOKEN`; a missing value fails the workflow rather than skipping exact-SHA verification.
+8. After deployment, confirm `/health.json`, representative redirects, the exact-SHA deployment attestation and the latest target-audit status.
+
+The Pages watcher and live target audit are separate mandatory controls: the watcher proves the expected source SHA reached production, while the target audit proves the authorised image destinations are healthy. Run `npm test` locally to execute the deterministic workflow contract checks; live provider verification remains in the authorised post-release workflow.
 
 Rollback and post-deployment checks are documented in [`docs/deployment-guide.md`](docs/deployment-guide.md). Security controls and the redirect trust boundary are documented in [`SECURITY.md`](SECURITY.md).
