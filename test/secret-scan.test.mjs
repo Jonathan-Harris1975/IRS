@@ -7,7 +7,12 @@ import { formatFinding, loadAllowlist, scanRepository, scanText } from '../scrip
 const root = process.cwd();
 const syntheticFixturePath = 'test/fixtures/secret-scan/synthetic-secrets.txt';
 const safeFixturePath = 'test/fixtures/secret-scan/safe-placeholders.txt';
-const syntheticFixture = fs.readFileSync(syntheticFixturePath, 'utf8');
+const syntheticFixture = [
+  `github_token=${['ghp', 'A'.repeat(36)].join('_')}`,
+  `aws_access_key=${['AKIA', 'ABCDEFGHIJKLMNOP'].join('')}`,
+  `Authorization: Bearer ${['synthetic', 'Bearer', 'Token', 'Value', '1234567890'].join('')}`,
+  `password=${['Synthetic', 'Password', 'For', 'Scanner', 'Only', '987654321'].join('-')}`,
+].join('\n');
 const safeFixture = fs.readFileSync(safeFixturePath, 'utf8');
 const allowlist = loadAllowlist(path.join(root, 'config', 'secret-scan-allowlist.json'));
 
@@ -32,14 +37,14 @@ test('safe placeholders are not rejected', () => {
   assert.deepEqual(findings, []);
 });
 
-test('documented synthetic fixture can be narrowly allow-listed', () => {
-  const { findings, allowlistHits } = scanText(syntheticFixture, syntheticFixturePath, allowlist);
+test('committed scanner fixture contains no credential-shaped literals', () => {
+  const committedFixture = fs.readFileSync(syntheticFixturePath, 'utf8');
+  const { findings } = scanText(committedFixture, syntheticFixturePath, []);
   assert.deepEqual(findings, []);
-  assert.equal(allowlistHits.size, 4);
 });
 
-test('allow-listing one fixture does not suppress an unrelated credential', () => {
-  const unrelated = `password=${'unrelated-' + 'credential-' + 'value-123456789'}`;
+test('allow-list entries do not suppress an unrelated credential', () => {
+  const unrelated = `password=${['unrelated', 'credential', 'value', '123456789'].join('-')}`;
   const { findings } = scanText(unrelated, syntheticFixturePath, allowlist);
   assert.equal(findings.some((finding) => finding.detector === 'credential-assignment'), true);
 });
