@@ -1,7 +1,7 @@
 # IRS operations and alerting
 
 **Status:** Cloudflare Pages production  
-**Last reviewed:** 20 September 2026
+**Last reviewed:** 22 September 2026
 
 IRS uses `data/image-url-map.json` and `public/_redirects` as a parity-checked redirect registry. `config/allowed-destination-hosts.json` is the authoritative destination-domain allow-list. CI rejects unknown hosts, embedded URL credentials, dynamic redirect sources and production-host loops before deployment.
 
@@ -111,7 +111,9 @@ After successful production verification on `main`, the watcher queries the Clou
 - `OPS_ALERT_WEBHOOK_URL`
 - `OPS_ALERT_WEBHOOK_TOKEN`
 
-The optional ecosystem smoke dispatch additionally uses `ECOSYSTEM_SMOKE_DISPATCH_TOKEN` and `ECOSYSTEM_SMOKE_REPOSITORY`.
+The first three Cloudflare values are mandatory for automatic production attestation. If any is absent, the workflow reports only the missing variable names and fails before the watcher, target audit or attestation can be presented as green. A successful attestation is written only after both the exact-SHA Pages watch and the live target audit pass, and the combined evidence is retained for 90 days.
+
+Alert webhook delivery and the central ecosystem smoke dispatch are separate from release integrity. The optional dispatch uses `ECOSYSTEM_SMOKE_DISPATCH_TOKEN` and `ECOSYSTEM_SMOKE_REPOSITORY`; it may be skipped after mandatory verification without changing the Pages attestation result. Run `npm test` for credential-free workflow contract checks. For a failed watcher, confirm the three Cloudflare secret names are configured, verify token scope and project name, then rerun the post-release workflow for the same expected SHA.
 
 ## Authoritative change procedure
 

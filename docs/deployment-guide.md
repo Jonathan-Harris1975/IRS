@@ -1,7 +1,7 @@
 # IRS production deployment guide
 
 **Status:** Production-controlled  
-**Last reviewed:** 20 September 2026
+**Last reviewed:** 22 September 2026
 
 ## Cloudflare Pages settings
 
@@ -35,17 +35,19 @@ CI keeps these concerns separate: deterministic verification is required, and a 
 
 ## Deployment and post-deployment verification
 
-Cloudflare Pages publishes `public/` from `main`. The Pages deployment watcher follows the production deployment matching the workflow SHA when Cloudflare API credentials are configured.
+Cloudflare Pages publishes `public/` from `main`. The automatic post-release workflow requires `CF_ACCOUNT_ID`, `CF_PAGES_PROJECT_NAME` and `CF_PAGES_API_TOKEN`; missing configuration fails closed. The watcher must observe a production deployment matching the workflow source SHA before the workflow can write an attestation.
 
 After deployment:
 
 1. Confirm `https://images.jonathan-harris.online/health.json` returns the static healthy contract.
 2. Check representative branded redirect paths and confirm a single permanent redirect to the intended authorised target.
-3. Confirm the deployment-watch target audit completed and its report/status artifacts were retained.
+3. Confirm the exact-SHA Pages watch and the separate redirect-target audit completed, and that their combined deployment evidence was retained.
 4. Confirm the scheduled target-audit workflow remains enabled for the next daily 06:17 UTC run.
 5. Confirm operations monitoring received the target-audit heartbeat when webhook credentials are configured.
 
 A green `/health.json` proves static/site liveness only. Downstream target health comes from the live audit and its freshness signal.
+
+Run `npm test` to exercise the deterministic deployment-workflow contract without Cloudflare credentials. The live Pages watcher is intentionally confined to the authorised post-release workflow. If it fails, check the named configuration item, token read scope, account/project identifiers and the expected workflow SHA; do not use target-audit success as a substitute for deployment verification.
 
 ## Scheduled dependency verification
 
