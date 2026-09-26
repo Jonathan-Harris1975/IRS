@@ -1,0 +1,4 @@
+# Synthetic secret-scanner fixtures committed in bbc548f215bba240ce5c62d9b4649537a760c9af.
+# Keep these exceptions fingerprint-specific so future real AWS keys/private keys still fail CI.
+bbc548f215bba240ce5c62d9b4649537a760c9af:test/fixtures/secret-scan/synthetic-secrets.txt:aws-access-token:6
+bbc548f215bba240ce5c62d9b4649537a760c9af:test/fixtures/secret-scan/synthetic-secrets.txt:private-key:2
