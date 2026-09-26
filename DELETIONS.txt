@@ -1,0 +1,5 @@
+Delete the following file from the repository:
+
+.github/workflows/dependabot-automerge.yml
+
+Reason: Dependabot remains configured only as a passive OpenSSF Scorecard signal with open-pull-requests-limit: 0. Its write-enabled auto-merge workflow is therefore redundant and would retain unnecessary contents/pull-requests write permissions.

@@ -1,0 +1,40 @@
+IRS CI SETUP REQUIREMENTS
+=========================
+
+New repository/environment secrets required by this CI update: NONE.
+
+The new security workflow uses GitHub's automatically provided GITHUB_TOKEN for OpenSSF Scorecard. Do not create a PAT for Scorecard.
+
+Existing IRS secrets used by pre-existing workflows are unchanged and are not introduced by this CI update:
+- OPS_ALERT_WEBHOOK_URL
+- OPS_ALERT_WEBHOOK_TOKEN
+- CF_ACCOUNT_ID
+- CF_PAGES_PROJECT_NAME
+- CF_PAGES_API_TOKEN
+- ECOSYSTEM_SMOKE_DISPATCH_TOKEN (optional cross-repository dispatch)
+
+New repository/environment variables required by this CI update: NONE.
+
+DEPENDENCY / LOCKFILE POLICY
+----------------------------
+- Dependabot is retained but open-pull-requests-limit is set to 0. This preserves its repository configuration as a Scorecard signal without allowing Dependabot version-update PRs.
+- Mend Renovate remains the dependency-update owner.
+- Renovate lockFileMaintenance is enabled.
+- Renovate npm updates are configured to keep package manifests and package-lock.json synchronised in the same PR.
+- Renovate GitHub Actions updates remain manual-approval PRs; automerge is disabled.
+- Existing npm ci verification remains in place and will fail when dependency manifests and package-lock.json are incompatible.
+
+CI TOOLS ADDED
+--------------
+- Trivy 0.74.0: direct pinned CLI, no Trivy GitHub Action wrapper.
+- Gitleaks 8.30.1: direct pinned CLI, no Gitleaks GitHub Action wrapper.
+- actionlint 1.7.12: direct pinned binary, no actionlint wrapper.
+- Lychee 0.24.2: direct pinned binary. It is enabled now rather than left optional.
+- OpenSSF Scorecard 5.5.0: direct pinned CLI build/run, no Scorecard Action wrapper.
+- Existing Advanced CodeQL is retained.
+- Hadolint is not installed because IRS contains no Dockerfile.
+- ShellCheck is not installed because IRS contains no meaningful standalone shell scripts. The new CI installer is Python specifically so that CI tooling does not manufacture a shell-script surface merely to lint itself.
+
+OWASP ZAP
+---------
+ZAP remains an ecosystem-level monthly DAST control rather than a per-PR IRS repository check. No ZAP secret or target URL has been added to IRS by this change.

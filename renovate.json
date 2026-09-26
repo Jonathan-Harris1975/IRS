@@ -2,5 +2,23 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "dependencyDashboard": true,
+  "rangeStrategy": "replace",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "packageRules": [
+    {
+      "description": "Keep GitHub Actions updates visible and manually approved",
+      "matchManagers": ["github-actions"],
+      "automerge": false
+    },
+    {
+      "description": "Keep npm manifests and package-lock.json synchronised",
+      "matchManagers": ["npm"],
+      "automerge": false
+    }
   ]
 }
