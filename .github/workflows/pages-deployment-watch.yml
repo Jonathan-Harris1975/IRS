@@ -27,7 +27,7 @@ jobs:
           node-version: 24.21.0
       - name: Verify pinned Node/npm toolchain
         run: |
-          test "$(node --version)" = "v22.23.3"
+          test "$(node --version)" = "v24.21.0"
           test "$(npm --version)" = "10.9.9"
       - name: Check Cloudflare Pages deployment-watch configuration
         id: pages_config

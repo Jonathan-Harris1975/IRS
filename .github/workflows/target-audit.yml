@@ -2,7 +2,7 @@ name: IRS scheduled target audit
 
 on:
   schedule:
-    - cron: '17 6 * * *'
+    - cron: '0 2 * * 0'
   workflow_dispatch:
 
 permissions:
@@ -25,7 +25,7 @@ jobs:
           cache: npm
       - name: Verify pinned Node/npm toolchain
         run: |
-          test "$(node --version)" = "v22.23.3"
+          test "$(node --version)" = "v24.21.0"
           test "$(npm --version)" = "10.9.9"
       - run: npm ci --ignore-scripts --no-audit --no-fund
 
