@@ -38,9 +38,9 @@ test('release gate requires deterministic verification and the live target audit
 });
 
 
-test('scheduled target audit is daily, serialised and persists a freshness signal', () => {
+test('scheduled target audit runs Sunday at 02:00 UTC, is serialised and persists a freshness signal', () => {
   const workflow = fs.readFileSync('.github/workflows/target-audit.yml', 'utf8');
-  assert.match(workflow, /cron:\s*['"]17 6 \* \* \*['"]/);
+  assert.match(workflow, /cron:\s*['"]0 2 \* \* 0['"]/);
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /concurrency:[\s\S]*?group:\s*irs-scheduled-target-audit/);
   assert.match(workflow, /IRS_TARGET_TIMEOUT_MS:\s*['"]12000['"]/);
