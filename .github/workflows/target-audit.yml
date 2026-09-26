@@ -23,6 +23,8 @@ jobs:
         with:
           node-version: 24.21.0
           cache: npm
+      - name: Install pinned npm
+        run: npm install --global npm@10.9.9 --ignore-scripts --no-audit --no-fund
       - name: Verify pinned Node/npm toolchain
         run: |
           test "$(node --version)" = "v24.21.0"
