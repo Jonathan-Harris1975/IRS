@@ -38,3 +38,17 @@ CI TOOLS ADDED
 OWASP ZAP
 ---------
 ZAP remains an ecosystem-level monthly DAST control rather than a per-PR IRS repository check. No ZAP secret or target URL has been added to IRS by this change.
+
+AUTOMATION / SCHEDULE POLICY
+----------------------------
+- GitHub scheduled CI controls (CodeQL, repository security/quality, and the scheduled live-target audit) are aligned to Sunday at 02:00 UTC using cron `0 2 * * 0`.
+- Push and pull-request CI remains immediate; the Sunday schedule is additional recurring assurance and does not delay change validation.
+- Renovate is restricted to Sunday 02:00-03:00 Europe/London. Mend's hosted scheduler may start work within the configured window rather than at an exact second.
+- Renovate automatically merges npm patch/minor updates and lockfile-maintenance PRs only after required branch/CI checks permit the merge.
+- npm major updates and GitHub Actions updates remain manual approval.
+- package-lock.json is updated by Renovate together with dependency manifest changes and is verified by npm ci.
+
+NODE TOOLCHAIN CORRECTION
+-------------------------
+- All IRS workflow assertions now match the repository's pinned Node.js 24.21.0 engine.
+- This removes the stale v22.23.3 assertion that caused the failed CI run before verification/audit work could execute.

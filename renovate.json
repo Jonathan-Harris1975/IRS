@@ -4,20 +4,31 @@
     "config:recommended"
   ],
   "dependencyDashboard": true,
+  "timezone": "Europe/London",
+  "schedule": ["after 2am and before 3am on sunday"],
   "rangeStrategy": "replace",
   "lockFileMaintenance": {
     "enabled": true,
-    "schedule": ["before 6am on monday"]
+    "schedule": ["after 2am and before 3am on sunday"],
+    "automerge": true
   },
   "packageRules": [
     {
-      "description": "Keep GitHub Actions updates visible and manually approved",
-      "matchManagers": ["github-actions"],
+      "description": "Automerge low-risk npm patch and minor updates after required CI passes",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Keep npm major updates manually approved",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["major"],
       "automerge": false
     },
     {
-      "description": "Keep npm manifests and package-lock.json synchronised",
-      "matchManagers": ["npm"],
+      "description": "Keep GitHub Actions updates visible and manually approved",
+      "matchManagers": ["github-actions"],
       "automerge": false
     }
   ]
