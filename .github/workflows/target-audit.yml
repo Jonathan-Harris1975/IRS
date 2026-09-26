@@ -25,8 +25,8 @@ jobs:
           cache: npm
       - name: Verify pinned Node/npm toolchain
         run: |
-          test "$(node --version)" = "v22.23.2"
-          test "$(npm --version)" = "10.9.8"
+          test "$(node --version)" = "v22.23.3"
+          test "$(npm --version)" = "10.9.9"
       - run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Restore previous target-audit status
