@@ -46,11 +46,30 @@ jobs:
           --no-progress
 
       - name: Gitleaks full-history secret scan
+        id: gitleaks
+        continue-on-error: true
         run: >-
           .ci-tools/bin/gitleaks git .
           --redact
           --no-banner
+          --report-format json
+          --report-path gitleaks-report.json
           --exit-code 1
+
+      - name: Upload redacted Gitleaks diagnostic report
+        if: always() && hashFiles('gitleaks-report.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gitleaks-redacted-diagnostic-${{ github.run_id }}
+          path: gitleaks-report.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce Gitleaks result
+        if: steps.gitleaks.outcome == 'failure'
+        run: |
+          echo 'Gitleaks detected potential secrets. Download the redacted diagnostic artifact for rule, file, commit, line and fingerprint metadata.' >&2
+          exit 1
 
       - name: Validate GitHub Actions workflows
         run: .ci-tools/bin/actionlint -color
