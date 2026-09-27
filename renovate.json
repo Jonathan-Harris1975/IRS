@@ -24,12 +24,12 @@
       "description": "Keep npm major updates manually approved",
       "matchManagers": ["npm"],
       "matchUpdateTypes": ["major"],
-      "automerge": true
+      "automerge": false
     },
     {
       "description": "Keep GitHub Actions updates visible and manually approved",
       "matchManagers": ["github-actions"],
-      "automerge": true
+      "automerge": false
     }
   ]
 }
