@@ -40,7 +40,11 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   const deployments = await listDeployments();
   const production = deployments.filter((item) => item.environment === 'production');
   last = commitSha
-    ? production.find((item) => deploymentSha(item).startsWith(commitSha)) || null
+    ? production.find((item) => {
+        const deployed = deploymentSha(item).trim().toLowerCase();
+        const expected = commitSha.trim().toLowerCase();
+        return deployed && expected && (deployed.startsWith(expected) || expected.startsWith(deployed));
+      }) || null
     : production[0] || null;
   if (!last) {
     console.log(`Expected IRS production deployment is not visible yet (attempt ${attempt}/${maxAttempts}).`);
