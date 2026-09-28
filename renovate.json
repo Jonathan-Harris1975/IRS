@@ -7,6 +7,13 @@
   "timezone": "Europe/London",
   "schedule": ["after 2am and before 3am on sunday"],
   "rangeStrategy": "replace",
+  "platformAutomerge": true,
+  "minimumReleaseAge": "3 days",
+  "vulnerabilityAlerts": {
+    "automerge": true,
+    "minimumReleaseAge": "0 days",
+    "labels": ["security"]
+  },
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["after 2am and before 3am on sunday"],
@@ -14,21 +21,14 @@
   },
   "packageRules": [
     {
-      "description": "Automerge low-risk npm patch and minor updates after required CI passes",
-      "matchManagers": ["npm"],
-      "matchUpdateTypes": ["patch", "minor"],
+      "description": "Automerge patch, minor and digest updates (npm and GitHub Actions) once the stability window and required checks pass",
+      "matchUpdateTypes": ["patch", "minor", "digest"],
       "automerge": true,
       "automergeType": "pr"
     },
     {
-      "description": "Keep npm major updates manually approved",
-      "matchManagers": ["npm"],
+      "description": "Keep major updates under manual review",
       "matchUpdateTypes": ["major"],
-      "automerge": false
-    },
-    {
-      "description": "Keep GitHub Actions updates visible and manually approved",
-      "matchManagers": ["github-actions"],
       "automerge": false
     }
   ]
