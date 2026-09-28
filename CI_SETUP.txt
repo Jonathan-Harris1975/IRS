@@ -52,3 +52,12 @@ NODE TOOLCHAIN CORRECTION
 -------------------------
 - All IRS workflow assertions now match the repository's pinned Node.js 24.21.0 engine.
 - This removes the stale v22.23.3 assertion that caused the failed CI run before verification/audit work could execute.
+
+AUTONOMOUS PROVING-GROUP SETUP
+- Scheduled window: Saturday 19:00 UTC; 2.5 hours reserved before the next repository starts.
+- KiloConnect + Kilo Code Bot: authorise both GitHub integrations for this repository. Failed CI/deployment-watch runs create one deduplicated repair issue mentioning @kilocode-bot.
+- Kilo may prepare dependency-manifest/lockfile/build fixes when evidence requires them, but all changes remain PR-only and must pass existing gates.
+- Mergify config handles explicit superseded/obsolete PR cleanup only; it is not the merge authority.
+- GitHub native branch/ruleset protections remain authoritative. Native Merge Queue can be enabled after required checks are confirmed stable.
+- R2 Council ingestion/publishing is deferred to the HIVE Council implementation; no R2 credentials are introduced by this phase.
+- Codecov and OWASP ZAP are intentionally NOT enabled.
