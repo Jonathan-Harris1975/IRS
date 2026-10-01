@@ -70,4 +70,3 @@ pull_request_rules:
     actions:
       queue:
         name: routine
-      delete_head_branch:
