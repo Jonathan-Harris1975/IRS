@@ -33,6 +33,8 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify autonomy lifecycle regressions
+        run: python3 .github/scripts/test_autonomy_lifecycle.py
       - name: Install pinned CI tools
         run: python scripts/install_ci_tools.py trivy gitleaks actionlint
 
