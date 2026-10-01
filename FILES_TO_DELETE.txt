@@ -1,0 +1,6 @@
+FILES TO DELETE — IRS
+
+These paths are deletion instructions only. They are not replacements.
+Delete them from the repository in the same change that applies the accompanying updated files.
+
+NONE — no repository files identified for deletion in the supplied snapshot.
