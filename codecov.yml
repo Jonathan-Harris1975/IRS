@@ -1,0 +1,9 @@
+# This repository does not currently produce a meaningful coverage report.
+# Keep a common Codecov configuration surface without creating noisy or misleading checks.
+coverage:
+  status:
+    project: false
+    patch: false
+
+comment: false
+github_checks: false
