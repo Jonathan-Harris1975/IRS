@@ -33,6 +33,8 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify branch PR safety and idempotency
+        run: python3 -m unittest discover -s .github/scripts -p "test_branch_pr_automation.py"
       - name: Verify autonomy lifecycle regressions
         run: python3 .github/scripts/test_autonomy_lifecycle.py
       - name: Install pinned CI tools
@@ -125,3 +127,4 @@ jobs:
           set -euo pipefail
           "$SCORECARD_BIN" --repo="github.com/${GITHUB_REPOSITORY}" --format=json --show-details > scorecard.json
           cat scorecard.json
+
