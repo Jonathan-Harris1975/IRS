@@ -59,6 +59,8 @@ jobs:
           OPS_ALERT_WEBHOOK_URL: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
           OPS_ALERT_WEBHOOK_TOKEN: ${{ secrets.OPS_ALERT_WEBHOOK_TOKEN }}
           GITHUB_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          CF_DEPLOYMENT_MAX_ATTEMPTS: '70'
+          CF_DEPLOYMENT_POLL_MS: '15000'
         run: npm run watch:pages
       - name: Audit every authorised live redirect target
         run: npm run audit:targets
