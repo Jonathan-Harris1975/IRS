@@ -56,3 +56,19 @@ test('optional dispatch is downstream of retained mandatory evidence', () => {
   assert.match(dispatch, /exit 0/);
   assert.match(dispatch, /optional cross-repository MAST dispatch was skipped/);
 });
+
+test('the deployment watch window covers slow Pages builds without exceeding the job timeout', () => {
+  const jobTimeoutMinutes = Number(workflow.match(/timeout-minutes:\s*(\d+)/)[1]);
+  const watch = stepBody('Watch the production Pages deployment');
+  const attempts = Number(watch.match(/CF_DEPLOYMENT_MAX_ATTEMPTS:\s*['"](\d+)['"]/)[1]);
+  const pollMs = Number(watch.match(/CF_DEPLOYMENT_POLL_MS:\s*['"](\d+)['"]/)[1]);
+  const windowMs = attempts * pollMs;
+  assert.ok(
+    windowMs >= 15 * 60 * 1000,
+    'the watch window must tolerate Pages builds that run longer than ten minutes',
+  );
+  assert.ok(
+    windowMs <= jobTimeoutMinutes * 60 * 1000,
+    'the watch window must fit inside the job timeout',
+  );
+});
