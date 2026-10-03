@@ -2,10 +2,12 @@
 """Reconcile current PR blockers using trusted metadata and bounded agent repairs."""
 
 from __future__ import annotations
+
 import json
 import os
-from pathlib import Path
 import re
+from pathlib import Path
+
 import pr_repair_router as router
 
 BOT_REVIEWERS = {"chatgpt-codex-connector", "kilo-code-bot"}
@@ -285,46 +287,68 @@ def describe_error(exc):
     }
 
 
+def error_result(number, exc):
+    detail = describe_error(exc)
+    return {
+        "pr": number,
+        "state": "recovery-error",
+        "error_type": type(exc).__name__,
+        **detail,
+    }
+
+
+def error_annotation(number, detail):
+    target = (
+        f"for PR #{number}"
+        if number is not None
+        else "could not enumerate candidate pull requests"
+    )
+    return (
+        f"::error::Blocker recovery {target}: {detail['error_code']}"
+        + (f" (HTTP {detail['http_status']})" if "http_status" in detail else "")
+        + ". "
+        + detail["guidance"]
+    )
+
+
+def report_line(result):
+    target = f"PR #{result['pr']}" if result.get("pr") is not None else "run"
+    line = f"- {target}: {result['state']}"
+    if "error_code" in result:
+        line += (
+            f" — {result['error_code']}"
+            + (f" (HTTP {result['http_status']})" if "http_status" in result else "")
+            + ". "
+            + result["guidance"]
+        )
+    return line
+
+
 def main():
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     results = []
     errors = 0
-    for number in candidate_numbers(event):
+    try:
+        numbers = candidate_numbers(event)
+    except Exception as exc:  # noqa: BLE001 - recovery must report every failure safely
+        errors += 1
+        detail = describe_error(exc)
+        results.append(error_result(None, exc))
+        print(error_annotation(None, detail))
+        numbers = []
+    for number in numbers:
         try:
             results.append(recover(number))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - recovery must report every failure safely
             errors += 1
             detail = describe_error(exc)
-            results.append(
-                {
-                    "pr": number,
-                    "state": "recovery-error",
-                    "error_type": type(exc).__name__,
-                    **detail,
-                }
-            )
-            print(
-                f"::error::Blocker recovery for PR #{number}: {detail['error_code']}"
-                + (f" (HTTP {detail['http_status']})" if "http_status" in detail else "")
-                + ". "
-                + detail["guidance"]
-            )
+            results.append(error_result(number, exc))
+            print(error_annotation(number, detail))
     text = json.dumps({"repository": router.REPO, "results": results}, indent=2) + "\n"
     Path("pr-blocker-recovery.json").write_text(text)
     summary = (
         "# Automatic PR blocker recovery\n\n"
-        + "\n".join(
-            f"- PR #{r['pr']}: {r['state']}"
-            + (
-                f" — {r['error_code']}"
-                + (f" (HTTP {r['http_status']})" if "http_status" in r else "")
-                + ". "
-                + r["guidance"]
-                if "error_code" in r
-                else ""
-            )
-            for r in results
-        )
+        + "\n".join(report_line(result) for result in results)
         + "\n"
     )
     with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as stream:
