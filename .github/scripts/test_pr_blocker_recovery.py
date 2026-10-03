@@ -3,10 +3,10 @@
 import copy
 import json
 import os
-from pathlib import Path
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 os.environ.setdefault("GITHUB_REPOSITORY", "owner/repo")
@@ -225,9 +225,11 @@ class Recovery(unittest.TestCase):
         self.assertFalse(any(c.args[1] == "/graphql" for c in api.call_args_list))
 
     def test_graphql_errors_are_not_a_clean_review(self):
-        with patch.object(m.router, "api", return_value={"errors": [{}]}):
-            with self.assertRaises(RuntimeError):
-                m.review_threads(7)
+        with (
+            patch.object(m.router, "api", return_value={"errors": [{}]}),
+            self.assertRaises(RuntimeError),
+        ):
+            m.review_threads(7)
 
     def test_no_native_required_checks_never_authorises_resolution(self):
         with patch.object(m.router, "api", return_value=[]):
@@ -335,7 +337,7 @@ class Recovery(unittest.TestCase):
                             "GITHUB_OUTPUT": str(output),
                         },
                     ):
-                        exec(actor_code, {})
+                        exec(actor_code, {})  # noqa: S102 - executes the extracted trusted snippet
                     self.assertEqual(output.read_text(), "trusted=" + expected + "\n")
         self.assertIn("needs: authenticate_actor", workflow)
         self.assertIn("needs.authenticate_actor.outputs.trusted == 'true'", workflow)
@@ -344,9 +346,11 @@ class Recovery(unittest.TestCase):
         )
 
     def test_rule_page_limit_does_not_authorise_resolution(self):
-        with patch.object(m.router, "api", return_value=[{"type": "dummy"}] * 100):
-            with self.assertRaises(ValueError):
-                m.required_checks_pass(self.pr)
+        with (
+            patch.object(m.router, "api", return_value=[{"type": "dummy"}] * 100),
+            self.assertRaises(ValueError),
+        ):
+            m.required_checks_pass(self.pr)
 
     @patch.dict(os.environ, {"KILO_REPAIR_TRIGGER_URL": "https://example.invalid/repair"})
     def test_behind_recovery_uses_real_dispatcher_return_and_existing_branch(self):
@@ -393,14 +397,81 @@ class Recovery(unittest.TestCase):
                             {"pr": 8, "state": "no-conflict-or-review-blocker"},
                         ],
                     ),
+                    self.assertRaises(SystemExit),
                 ):
-                    with self.assertRaises(SystemExit):
-                        m.main()
+                    m.main()
                 report = json.loads(Path("pr-blocker-recovery.json").read_text())
                 self.assertEqual(len(report["results"]), 2)
                 self.assertNotIn("hidden detail", summary.read_text())
             finally:
                 os.chdir(previous)
+
+    def test_candidate_discovery_failure_is_reported_without_secrets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            event = Path(directory) / "event.json"
+            event.write_text("{}")
+            summary = Path(directory) / "summary.md"
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                failure = m.router.urllib.error.HTTPError(
+                    "https://api.github.com/private?token=secret-value",
+                    403,
+                    "secret-value",
+                    {},
+                    None,
+                )
+                with (
+                    patch.dict(
+                        os.environ,
+                        {"GITHUB_EVENT_PATH": str(event), "GITHUB_STEP_SUMMARY": str(summary)},
+                    ),
+                    patch.object(m, "candidate_numbers", side_effect=failure),
+                    patch.object(m, "recover") as recover,
+                    self.assertRaises(SystemExit),
+                ):
+                    m.main()
+                recover.assert_not_called()
+                report = json.loads(Path("pr-blocker-recovery.json").read_text())
+                self.assertIsNone(report["results"][0]["pr"])
+                self.assertEqual(report["results"][0]["error_code"], "github-api-http")
+                self.assertEqual(report["results"][0]["http_status"], 403)
+                self.assertNotIn("secret-value", json.dumps(report))
+                self.assertNotIn("secret-value", summary.read_text())
+            finally:
+                os.chdir(previous)
+
+    def test_operational_errors_are_actionable_without_exposing_secrets(self):
+        cases = [
+            (
+                RuntimeError(
+                    "Configure KILO_REPAIR_TRIGGER_URL with this repository's Kilo Cloud Agent webhook trigger"
+                ),
+                "repair-webhook-configuration",
+            ),
+            (RuntimeError("Kilo trigger returned HTTP 401"), "repair-webhook-http"),
+            (RuntimeError("Kilo trigger could not be reached"), "repair-webhook-unreachable"),
+            (
+                m.router.urllib.error.HTTPError(
+                    "https://api.github.com/private?token=secret-value",
+                    403,
+                    "secret-value",
+                    {},
+                    None,
+                ),
+                "github-api-http",
+            ),
+            (
+                RuntimeError("https://private.invalid?token=secret-value"),
+                "unexpected-recovery-error",
+            ),
+        ]
+        for error, code in cases:
+            result = m.describe_error(error)
+            self.assertEqual(result["error_code"], code)
+            self.assertNotIn("secret-value", json.dumps(result))
+        self.assertEqual(m.describe_error(cases[1][0])["http_status"], 401)
+        self.assertEqual(m.describe_error(cases[3][0])["http_status"], 403)
 
     def test_conflict_dispatch_requests_existing_branch_and_no_force_push(self):
         with (
