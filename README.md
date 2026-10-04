@@ -1,4 +1,4 @@
-# Image Redirect Service (IRS).
+# Image Redirect Service (IRS)
 
 IRS is the Cloudflare Pages redirect registry behind `images.jonathan-harris.online`. It gives published content stable branded image paths while the underlying assets live on explicitly authorised ImageKit hosts.
 
