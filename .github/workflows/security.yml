@@ -53,7 +53,7 @@ jobs:
 
       - name: Verify Gitleaks exact-fingerprint ignore contract
         env:
-          GITLEAKS_BIN: .ci-tools/bin/gitleaks
+          GITLEAKS_BIN: ${{ github.workspace }}/.ci-tools/bin/gitleaks
         run: |
           set -euo pipefail
           fixture="$(mktemp -d)"
