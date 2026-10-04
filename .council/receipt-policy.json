@@ -1,0 +1,7 @@
+{
+  "ci": "ci.yml",
+  "deployment": "pages-deployment-watch.yml",
+  "artifact": "irs-live-target-audit-",
+  "dast": true,
+  "dispatch_step": "Dispatch Council contract to Kilo"
+}
