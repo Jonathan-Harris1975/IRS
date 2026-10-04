@@ -21,7 +21,7 @@ DEPENDENCY / LOCKFILE POLICY
 - Mend Renovate remains the dependency-update owner.
 - Renovate lockFileMaintenance is enabled.
 - Renovate npm updates are configured to keep package manifests and package-lock.json synchronised in the same PR.
-- Renovate patch/minor/digest updates, including GitHub Actions where detected, may automerge only after the stability window and required checks pass; major updates remain manual.
+- Renovate patch/minor/digest updates, including GitHub Actions where detected, receive `dependency:auto-eligible` after the stability window and may be admitted only after required checks pass; major updates carry `dependency:manual` and remain human decisions.
 - Existing npm ci verification remains in place and will fail when dependency manifests and package-lock.json are incompatible.
 
 CI TOOLS ADDED
@@ -45,7 +45,7 @@ AUTOMATION / SCHEDULE POLICY
 - Push and pull-request CI remains immediate; the Saturday schedule is additional recurring assurance and does not delay change validation.
 - Renovate is restricted to Saturday 19:00-21:30 Europe/London. Mend's hosted scheduler may start work within the configured window rather than at an exact second.
 - Renovate automatically merges npm patch/minor updates and lockfile-maintenance PRs only after required branch/CI checks permit the merge.
-- Major updates remain manual. Patch/minor/digest updates follow the committed Renovate automerge policy and still require repository checks.
+- Major updates remain manual. Patch/minor/digest updates follow the committed Renovate eligibility-label policy and still require repository checks.
 - package-lock.json is updated by Renovate together with dependency manifest changes and is verified by npm ci.
 
 NODE TOOLCHAIN CORRECTION
