@@ -26,18 +26,24 @@ jobs:
           node-version: 24.21.0
           cache: npm
       - name: Install pinned npm
-        run: npm install --global npm@10.9.9 --ignore-scripts --no-audit --no-fund
+        run: |
+          npm ci --prefix .github/ci-toolchain --ignore-scripts --no-audit --no-fund
+          export PATH="$GITHUB_WORKSPACE/.github/ci-toolchain/node_modules/.bin:$PATH"
       - name: Verify pinned Node/npm toolchain
         run: |
+          export PATH="$GITHUB_WORKSPACE/.github/ci-toolchain/node_modules/.bin:$PATH"
           test "$(node --version)" = "v24.21.0"
-          test "$(npm --version)" = "10.9.9"
-      - run: npm ci --ignore-scripts --no-audit --no-fund
+          test "$(npm --version)" = "$(node -p 'require("./.github/ci-toolchain/package-lock.json").packages["node_modules/npm"].version')"
+      - run: |
+          export PATH="$GITHUB_WORKSPACE/.github/ci-toolchain/node_modules/.bin:$PATH"
+          npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Restore previous target-audit status
         id: previous_status
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          export PATH="$GITHUB_WORKSPACE/.github/ci-toolchain/node_modules/.bin:$PATH"
           set -euo pipefail
           mkdir -p reports/previous
           if ! artifact_url="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=irs-target-status&per_page=100" \
@@ -77,11 +83,13 @@ jobs:
           IRS_TARGET_STALENESS_HOURS: '36'
           OPS_ALERT_WEBHOOK_URL: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
           OPS_ALERT_WEBHOOK_TOKEN: ${{ secrets.OPS_ALERT_WEBHOOK_TOKEN }}
-        run: npm run audit:targets
-
+        run: |
+          export PATH="$GITHUB_WORKSPACE/.github/ci-toolchain/node_modules/.bin:$PATH"
+          npm run audit:targets
       - name: Publish target-audit summary
         if: always()
         run: |
+          export PATH="$GITHUB_WORKSPACE/.github/ci-toolchain/node_modules/.bin:$PATH"
           set -euo pipefail
           if [ ! -f reports/irs-target-status.json ]; then
             echo "### IRS target audit" >> "$GITHUB_STEP_SUMMARY"
@@ -115,4 +123,6 @@ jobs:
         if: always()
         env:
           AUDIT_OUTCOME: ${{ steps.target_audit.outcome }}
-        run: test "$AUDIT_OUTCOME" = "success"
+        run: |
+          export PATH="$GITHUB_WORKSPACE/.github/ci-toolchain/node_modules/.bin:$PATH"
+          test "$AUDIT_OUTCOME" = "success"
