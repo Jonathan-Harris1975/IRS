@@ -40,8 +40,8 @@ test('target health cannot substitute for deployment verification', () => {
   const watchIndex = workflow.indexOf('- name: Watch the production Pages deployment');
   const auditIndex = workflow.indexOf('- name: Audit every authorised live redirect target');
   assert.ok(configIndex > 0 && watchIndex > configIndex && auditIndex > watchIndex);
-  assert.match(workflow, /run: npm run watch:pages/);
-  assert.match(workflow, /run: npm run audit:targets/);
+  assert.match(workflow, /^\s+npm run watch:pages\s*$/m);
+  assert.match(workflow, /^\s+npm run audit:targets\s*$/m);
 });
 
 test('optional dispatch is downstream of retained mandatory evidence', () => {

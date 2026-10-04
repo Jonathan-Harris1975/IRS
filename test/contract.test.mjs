@@ -26,14 +26,14 @@ test('CI uses the dedicated secret scanner instead of the legacy grep gate', () 
   const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
   assert.match(packageJson.scripts['scan:secrets'], /scripts\/secret-scan\.mjs/);
   assert.match(packageJson.scripts.verify, /npm run scan:secrets/);
-  assert.match(workflow, /run:\s*npm run verify/);
+  assert.match(workflow, /^\s+npm run verify\s*$/m);
   assert.doesNotMatch(workflow, /grep\s+-RIE|Reject committed secrets/);
 });
 
 test('release gate requires deterministic verification and the live target audit', () => {
   const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
   assert.match(workflow, /live_target_audit:/);
-  assert.match(workflow, /run:\s*npm run audit:targets/);
+  assert.match(workflow, /^\s+npm run audit:targets\s*$/m);
   assert.match(workflow, /release_gate:[\s\S]*?needs:\s*\[verify,\s*live_target_audit\]/);
 });
 
