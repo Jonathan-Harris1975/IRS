@@ -85,6 +85,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test -n "$DEFAULT_BRANCH" || { echo "::error::Repository default branch is unavailable"; exit 1; }
           workflows=("$WORKFLOW")
           if [ "$PHASE" = "ci" ]; then
             workflows+=("codeql.yml" "security.yml")
