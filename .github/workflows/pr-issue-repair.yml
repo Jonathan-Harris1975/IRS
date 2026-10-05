@@ -82,6 +82,8 @@ jobs:
         persist-credentials: false
     - name: Verify blocker recovery safety
       run: python3 .github/scripts/test_pr_blocker_recovery.py
+    - name: Verify autonomous repair router safety
+      run: python3 .github/scripts/test_pr_repair_router.py
     - name: Extract actionable PR findings and start Kilo repair
       env:
         GH_TOKEN: ${{ github.token }}
