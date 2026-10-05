@@ -202,7 +202,8 @@ def recover(number):
             ).get("thread", {}).get("isResolved"):
                 raise RuntimeError("Review thread resolution was not confirmed")
             resolved.append(thread["id"])
-    # A dispatch receipt records attempted recovery; it does not prove the GitHub thread was resolved.\n    remaining = [t for t in bot_threads if t["id"] not in resolved]
+    # A dispatch receipt records attempted recovery; it does not prove the GitHub thread was resolved.
+    remaining = [t for t in bot_threads if t["id"] not in resolved]
     request = None
     if remaining and (checks_pass or not receipts):
         evidence = [
