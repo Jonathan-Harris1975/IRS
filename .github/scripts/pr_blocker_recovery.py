@@ -169,7 +169,8 @@ def recover(number):
     comments = router.all_pages(f"/repos/{router.REPO}/issues/{number}/comments")
     receipts = verified_receipts(comments, sha, base)
     resolved = []
-    if receipts and required_checks_pass(pr):
+    checks_pass = required_checks_pass(pr)
+    if receipts and checks_pass:
         for thread in bot_threads:
             if thread["id"] not in receipts:
                 continue
@@ -201,9 +202,9 @@ def recover(number):
             ).get("thread", {}).get("isResolved"):
                 raise RuntimeError("Review thread resolution was not confirmed")
             resolved.append(thread["id"])
-    remaining = [t for t in bot_threads if t["id"] not in resolved and t["id"] not in receipts]
+    # A dispatch receipt records attempted recovery; it does not prove the GitHub thread was resolved.\n    remaining = [t for t in bot_threads if t["id"] not in resolved]
     request = None
-    if remaining:
+    if remaining and (checks_pass or not receipts):
         evidence = [
             f"Thread {t['id']} at {t['path']}:{t.get('line') or 'historical line'} (outdated={t['isOutdated']}): "
             + router.review_evidence(t["comments"]["nodes"][0]["body"], t["path"])[:3500]
