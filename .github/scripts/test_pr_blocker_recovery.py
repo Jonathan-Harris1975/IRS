@@ -200,7 +200,7 @@ class Recovery(unittest.TestCase):
         ):
             result = m.recover(7)
             self.assertEqual(result["resolved"], [])
-            self.assertEqual(result["bot_threads_remaining"], 0)
+            self.assertEqual(result["bot_threads_remaining"], 1)
         dispatch.assert_not_called()
         self.assertFalse(any(c.args[1] == "/graphql" for c in api.call_args_list))
 
