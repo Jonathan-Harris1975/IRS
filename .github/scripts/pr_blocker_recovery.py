@@ -107,7 +107,7 @@ def required_checks_pass(pr):
 
 
 def verified_receipts(comments, sha, base_sha):
-    trusted = {login(router.REPAIR_APP_LOGIN)} - {""}
+    trusted = {login(router.REPAIR_APP_LOGIN), login(router.KILO_IMPLEMENTER)} - {""}
     receipts = {}
     for comment in comments:
         if login(comment.get("user", {}).get("login")) not in trusted:
