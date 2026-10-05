@@ -2,12 +2,10 @@ version: 2
 updates:
   # There are currently no npm dependencies; GitHub Actions are the active
   # dependency-update surface. Re-add npm when application packages exist.
-  - package-ecosystem: "github-actions"
+  - package-ecosystem: "github-actions" # zizmor: ignore[dependabot-cooldown] Renovate owns version updates; Dependabot remains for security updates.
     directory: "/"
     schedule:
       interval: "weekly"
-    cooldown:
-      default-days: 7
     open-pull-requests-limit: 0
     commit-message:
       prefix: "deps(ci)"
