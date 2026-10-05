@@ -2,6 +2,7 @@ version: 2
 updates:
   # There are currently no npm dependencies; GitHub Actions are the active
   # dependency-update surface. Re-add npm when application packages exist.
+  # Renovate owns version updates; Dependabot remains configured for security/update metadata.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

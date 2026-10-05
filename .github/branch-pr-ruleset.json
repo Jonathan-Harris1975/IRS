@@ -61,6 +61,14 @@
           {
             "context": "Analyze (python)",
             "integration_id": 15368
+          },
+          {
+            "context": "Item 6 / Dependency Review",
+            "integration_id": 15368
+          },
+          {
+            "context": "Item 6 / Renovate config",
+            "integration_id": 15368
           }
         ]
       }

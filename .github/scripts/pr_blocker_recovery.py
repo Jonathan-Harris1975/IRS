@@ -59,8 +59,15 @@ def review_threads(number):
 def required_checks_pass(pr):
     # GitHub supplies the effective native branch requirements. Never infer them
     # from workflow names or accept an empty requirement set as approval.
-    branch = router.urllib.parse.quote(router.DEFAULT, safe="")
-    rules = router.all_pages(f"/repos/{router.REPO}/rules/branches/{branch}")
+    rulesets = router.all_pages(f"/repos/{router.REPO}/rulesets")
+    rules = []
+    for summary in rulesets:
+        if summary.get("enforcement") != "active" or summary.get("target") != "branch":
+            continue
+        detail = router.api("GET", f"/repos/{router.REPO}/rulesets/{summary['id']}")
+        includes = detail.get("conditions", {}).get("ref_name", {}).get("include", [])
+        if "~DEFAULT_BRANCH" in includes or f"refs/heads/{router.DEFAULT}" in includes:
+            rules.extend(detail.get("rules", []))
     required = [
         item
         for rule in rules
@@ -100,7 +107,7 @@ def required_checks_pass(pr):
 
 
 def verified_receipts(comments, sha, base_sha):
-    trusted = {login(router.KILO_IMPLEMENTER), login(router.REPAIR_APP_LOGIN)} - {""}
+    trusted = {login(router.REPAIR_APP_LOGIN), login(router.KILO_IMPLEMENTER)} - {""}
     receipts = {}
     for comment in comments:
         if login(comment.get("user", {}).get("login")) not in trusted:
@@ -152,16 +159,18 @@ def recover(number):
     threads = [t for t in review_threads(number) if not t["isResolved"]]
     if not threads:
         return {"pr": number, "state": "no-conflict-or-review-blocker"}
+    repair_reviewers = BOT_REVIEWERS | {login(router.KILO_IMPLEMENTER), login(router.REPAIR_APP_LOGIN)} - {""}
     bot_threads = [
         t
         for t in threads
         if t["comments"]["nodes"]
-        and login(t["comments"]["nodes"][0].get("author", {}).get("login")) in BOT_REVIEWERS
+        and login(t["comments"]["nodes"][0].get("author", {}).get("login")) in repair_reviewers
     ]
     comments = router.all_pages(f"/repos/{router.REPO}/issues/{number}/comments")
     receipts = verified_receipts(comments, sha, base)
     resolved = []
-    if receipts and required_checks_pass(pr):
+    checks_pass = required_checks_pass(pr)
+    if receipts and checks_pass:
         for thread in bot_threads:
             if thread["id"] not in receipts:
                 continue
@@ -193,9 +202,10 @@ def recover(number):
             ).get("thread", {}).get("isResolved"):
                 raise RuntimeError("Review thread resolution was not confirmed")
             resolved.append(thread["id"])
+    # A dispatch receipt records attempted recovery; it does not prove the GitHub thread was resolved.
     remaining = [t for t in bot_threads if t["id"] not in resolved]
     request = None
-    if remaining:
+    if remaining and (checks_pass or not receipts):
         evidence = [
             f"Thread {t['id']} at {t['path']}:{t.get('line') or 'historical line'} (outdated={t['isOutdated']}): "
             + router.review_evidence(t["comments"]["nodes"][0]["body"], t["path"])[:3500]
