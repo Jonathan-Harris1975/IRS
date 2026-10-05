@@ -57,8 +57,8 @@ AUTONOMOUS PROVING-GROUP SETUP
 - Scheduled window: Saturday 19:00 UTC; 2.5 hours reserved before the next repository starts.
 - KiloConnect + Kilo Code Bot: authorise both GitHub integrations for this repository. Failed default-branch CI/deployment-watch runs create one deduplicated repair PR and trigger Kilo Cloud Agent; actionable PR review comments and failed PR checks trigger it directly.
 - Kilo may prepare dependency-manifest/lockfile/build fixes when evidence requires them, but all changes remain PR-only and must pass existing gates.
-- Mergify config handles explicit superseded/obsolete PR cleanup only; it is not the merge authority.
-- GitHub native branch/ruleset protections remain authoritative. Native Merge Queue can be enabled after required checks are confirmed stable.
+- Mergify is the sole automation merger for admitted PRs and also handles explicit superseded/obsolete PR cleanup.
+- GitHub native branch/ruleset protections remain authoritative; Mergify may queue and merge only after the exact-head required checks and configured protections are satisfied.
 - R2 Council ingestion/publishing is deferred to the HIVE Council implementation; no R2 credentials are introduced by this phase.
 - Codecov and OWASP ZAP are intentionally NOT enabled.
 
@@ -77,8 +77,8 @@ AUTONOMOUS REPAIR + TRUSTED PR AUTOMATION
 - Renovate PRs may be admitted to run CI regardless of update type. Native auto-approval/auto-merge is requested only when the Renovate PR body explicitly reports `Automerge: Enabled.`; major/manual Renovate PRs remain manual as defined by committed `renovate.json` policy.
 - A verified linked Kilo implementation PR may be approved only after the current head SHA has successful repository CI, CodeQL and repository-security workflows while GitHub enforces any other required branch/ruleset checks.
 - Kilo implementation changes to workflows, Renovate/Mergify configuration, CodeQL/security policy, secret-scanner controls, CODEOWNERS, SECURITY.md or autonomy governance files receive `autonomy:human-hold`. Carrier PRs are lifecycle evidence and never auto-merge.
-- `.mergify.yml` performs lifecycle housekeeping only: it may close `autonomy:superseded` and `autonomy:obsolete` PRs, but it does not merge code.
-- Native GitHub auto-merge / Merge Queue is the final merge authority. Trusted automation can request native auto-merge only after the exact-head checks are green; GitHub branch/ruleset protections remain authoritative.
+- `.mergify.yml` is the sole automation merger for admitted PRs. It also performs lifecycle housekeeping such as closing `autonomy:superseded` and `autonomy:obsolete` PRs.
+- Mergify may queue and merge only after the exact-head required checks are green and all configured protections are satisfied; GitHub branch/ruleset protections remain authoritative. Do not enable a separate native auto-merge path that bypasses Mergify.
 - Keep GitHub automatic deletion of merged head branches enabled where desired to remove completed automation branches.
 - Only current high/critical CodeQL security alerts block the extra CodeQL gate; GitHub’s configured code-scanning ruleset remains independent. Genuine failed checks feed the Kilo repair router. Alert dismissal, broad suppressions, allowlist changes and security-policy decisions remain human-controlled.
 
