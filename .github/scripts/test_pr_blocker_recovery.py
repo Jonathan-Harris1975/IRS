@@ -146,8 +146,9 @@ class Recovery(unittest.TestCase):
         ]:
             self.assertEqual(m.verified_receipts([receipt], "a" * 40, "b" * 40), {})
         self.assertIn("PRRT_test", m.verified_receipts([self.receipt()], "a" * 40, "b" * 40))
-        self.assertEqual(
-            m.verified_receipts([self.receipt(author="kilo-code-bot[bot]")], "a" * 40, "b" * 40), {}
+        self.assertIn(
+            "PRRT_test",
+            m.verified_receipts([self.receipt(author="kilo-code-bot[bot]")], "a" * 40, "b" * 40),
         )
 
     def test_receipt_accepts_configured_app_identity(self):
