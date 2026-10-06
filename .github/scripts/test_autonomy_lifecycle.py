@@ -88,6 +88,36 @@ class RepairRetirementTests(unittest.TestCase):
         self.delete.assert_not_called()
 
 
+class ExplicitRetirementTests(unittest.TestCase):
+    def setUp(self):
+        self.pr = {
+            "number": 88, "state": "open", "draft": False,
+            "user": {"login": "owner"},
+            "head": {"ref": "work/stale", "repo": {"full_name": "owner/repo"}},
+            "base": {"ref": "main"},
+            "labels": [{"name": "autonomy:obsolete"}, {"name": "automation:branch-pr"}],
+        }
+        for name, value in {"REPO": "owner/repo", "DEFAULT_BRANCH": "main"}.items():
+            self.enterContext(patch.object(automation, name, value))
+        self.write = self.enterContext(patch.object(automation, "request"))
+        self.delete = self.enterContext(patch.object(automation, "delete"))
+        self.enterContext(patch.object(automation, "log"))
+
+    def test_explicit_obsolete_label_closes_same_repo_pr(self):
+        automation.reconcile_explicitly_retired_prs([copy.deepcopy(self.pr)])
+        self.write.assert_called_once_with("PATCH", "/repos/owner/repo/pulls/88", {"state": "closed"})
+        self.delete.assert_called_once_with(
+            "/repos/owner/repo/issues/88/labels/automation%3Abranch-pr", expected=(200, 204)
+        )
+
+    def test_unlabelled_or_fork_pr_is_not_closed(self):
+        unlabelled = copy.deepcopy(self.pr)
+        unlabelled["labels"] = []
+        fork = copy.deepcopy(self.pr)
+        fork["head"]["repo"]["full_name"] = "fork/repo"
+        automation.reconcile_explicitly_retired_prs([unlabelled, fork])
+        self.write.assert_not_called()
+
 class ManagedBranchOwnershipTests(unittest.TestCase):
     def setUp(self):
         self.sha = "c" * 40
