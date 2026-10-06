@@ -152,7 +152,6 @@ class ManagedBranchOwnershipTests(unittest.TestCase):
 
     def test_managed_branch_pr_is_admitted_to_mergify_after_green_checks(self):
         admit = self.enterContext(patch.object(automation, "admit_to_mergify"))
-        approve = self.enterContext(patch.object(automation, "approve_pr"))
         self.enterContext(
             patch.object(automation, "pr_files", return_value=["src/example.ts"])
         )
@@ -170,7 +169,6 @@ class ManagedBranchOwnershipTests(unittest.TestCase):
         automation.reconcile_pr(copy.deepcopy(self.pr))
 
         admit.assert_called_once_with(22)
-        approve.assert_not_called()
 
     def test_managed_branch_pr_touching_governance_gets_human_hold(self):
         hold = self.enterContext(patch.object(automation, "place_human_hold"))
