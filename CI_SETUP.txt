@@ -41,10 +41,10 @@ ZAP remains an ecosystem-level monthly DAST control rather than a per-PR IRS rep
 
 AUTOMATION / SCHEDULE POLICY
 ----------------------------
-- GitHub scheduled CI controls (CodeQL, repository security/quality, and the scheduled live-target audit) are aligned to Saturday at 19:00 UTC using cron `0 19 * * 6`.
-- Push and pull-request CI remains immediate; the Saturday schedule is additional recurring assurance and does not delay change validation.
-- Renovate is restricted to Saturday 19:00-21:30 Europe/London. Mend's hosted scheduler may start work within the configured window rather than at an exact second.
-- Renovate automatically merges npm patch/minor updates and lockfile-maintenance PRs only after required branch/CI checks permit the merge.
+- The MAST-aware weekend launcher is the sole scheduler for the IRS weekend CI phase: Saturday 06:00–08:30 Europe/London. It dispatches Production verification, CodeQL, Security and repository quality, the live target audit and Item 6 hardening from the same phase boundary.
+- Push and pull-request CI remains immediate; the Saturday window is additional recurring assurance and does not delay change validation.
+- Renovate is restricted to Saturday 05:00–06:00 Europe/London so dependency discovery/PR refresh occurs immediately before the IRS CI slot. Mend's hosted scheduler may start work within the configured window rather than at an exact second.
+- Renovate never merges directly. Eligible patch/minor/digest, vulnerability and lock-maintenance PRs receive `dependency:auto-eligible`; trusted admission verifies the exact head and Mergify remains the sole automation merger.
 - Major updates remain manual. Patch/minor/digest updates follow the committed Renovate eligibility-label policy and still require repository checks.
 - package-lock.json is updated by Renovate together with dependency manifest changes and is verified by npm ci.
 
@@ -54,13 +54,14 @@ NODE TOOLCHAIN CORRECTION
 - This removes the stale v22.23.3 assertion that caused the failed CI run before verification/audit work could execute.
 
 AUTONOMOUS PROVING-GROUP SETUP
-- Scheduled window: Saturday 19:00 UTC; 2.5 hours reserved before the next repository starts.
+- Scheduled CI window: Saturday 06:00–08:30 Europe/London; Renovate refresh: Saturday 05:00–06:00 Europe/London.
 - KiloConnect + Kilo Code Bot: authorise both GitHub integrations for this repository. Failed default-branch CI/deployment-watch runs create one deduplicated repair PR and trigger Kilo Cloud Agent; actionable PR review comments and failed PR checks trigger it directly.
 - Kilo may prepare dependency-manifest/lockfile/build fixes when evidence requires them, but all changes remain PR-only and must pass existing gates.
 - Mergify is the sole automation merger for admitted PRs and also handles explicit superseded/obsolete PR cleanup.
 - GitHub native branch/ruleset protections remain authoritative; Mergify may queue and merge only after the exact-head required checks and configured protections are satisfied.
 - R2 Council ingestion/publishing is deferred to the HIVE Council implementation; no R2 credentials are introduced by this phase.
-- Codecov and OWASP ZAP are intentionally NOT enabled.
+- IRS produces no retained immutable deployment bundle in its current Cloudflare Pages flow, so artifact attestation/SBOM is N/A under the v8 provenance rule; repository-only ceremonial SBOM attestation is not used.
+- Codecov and OWASP ZAP remain intentionally disabled unless separately authorised; DAST stays provisioned behind the explicit DAST_ENABLED/DAST_TARGET_URL gate.
 
 - GitHub Actions must be allowed to create pull requests in repository Actions settings for the autonomous repair-PR workflow.
 - Enable Kilo Code Reviews for this repository and enable REVIEW.md guidance in the Kilo Code Reviews configuration.
