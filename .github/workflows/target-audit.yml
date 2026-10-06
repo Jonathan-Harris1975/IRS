@@ -1,8 +1,6 @@
 name: IRS scheduled target audit
 
 on:
-  schedule:
-    - cron: '0 19 * * 6'
   workflow_dispatch:
 
 permissions:

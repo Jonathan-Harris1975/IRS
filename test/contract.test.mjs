@@ -38,17 +38,19 @@ test('release gate requires deterministic verification and the live target audit
 });
 
 
-test('scheduled target audit runs Saturday at 19:00 UTC, is serialised and persists a freshness signal', () => {
+test('MAST-aware launcher exclusively schedules the Saturday IRS target audit', () => {
   const workflow = fs.readFileSync('.github/workflows/target-audit.yml', 'utf8');
-  assert.match(workflow, /cron:\s*['"]0 19 \* \* 6['"]/);
+  const launcher = fs.readFileSync('.github/workflows/weekend-phase-launcher.yml', 'utf8');
+  assert.doesNotMatch(workflow, /schedule:/);
   assert.match(workflow, /workflow_dispatch:/);
+  assert.match(launcher, /workflows\+=\("codeql\.yml" "security\.yml" "target-audit\.yml" "item6-hardening\.yml"\)/);
+  assert.match(launcher, /"0 5 \* \* 6:\+0100"\|"0 6 \* \* 6:\+0000"\)[\s\S]*phase="ci"/);
   assert.match(workflow, /concurrency:[\s\S]*?group:\s*irs-scheduled-target-audit/);
   assert.match(workflow, /IRS_TARGET_TIMEOUT_MS:\s*['"]12000['"]/);
   assert.match(workflow, /IRS_TARGET_CONCURRENCY:\s*['"]4['"]/);
   assert.match(workflow, /name:\s*irs-target-status/);
   assert.match(workflow, /retention-days:\s*90/);
 });
-
 test('static liveness remains independent from target-audit status', () => {
   const health = JSON.parse(fs.readFileSync('public/health.json', 'utf8'));
   assert.equal(health.status, 'healthy');

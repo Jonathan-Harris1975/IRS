@@ -1,6 +1,6 @@
 # Autonomous Repository Policy
 
-Scheduled repository window: **Saturday 19:00 UTC**, with a 2.5-hour allocation before the next repository starts.
+Scheduled repository CI window: **Saturday 06:00–08:30 Europe/London**. Renovate refresh is restricted to **05:00–06:00 Europe/London** so eligible dependency work can settle before exact-SHA CI evidence is recorded.
 
 All changes from humans, Renovate, autofix.ci, KiloConnect/Kilo Code, RAMS/OpenRouter or future Council automation must use a pull request and pass this repository's required CI/security/deployment gates.
 
