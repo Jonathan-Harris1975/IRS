@@ -8,5 +8,5 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 0
-    commit-message:
+    cooldown:\n      default-days: 7\n    commit-message:
       prefix: "deps(ci)"
