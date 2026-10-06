@@ -370,26 +370,6 @@ def current_head_unchanged(number: int, expected_sha: str) -> dict[str, Any] | N
     return current
 
 
-def has_current_approval(number: int, sha: str) -> bool:
-    reviews = get(f"/repos/{REPO}/pulls/{number}/reviews?per_page=100")
-    return any(r.get("state") == "APPROVED" and r.get("commit_id") == sha for r in reviews)
-
-
-def approve_pr(number: int, sha: str) -> None:
-    if has_current_approval(number, sha):
-        return
-    post(
-        f"/repos/{REPO}/pulls/{number}/reviews",
-        {
-            "event": "APPROVE",
-            "body": "Trusted automation approval: exact-head CI, CodeQL and repository security checks passed.",
-            "commit_id": sha,
-        },
-        expected=(200, 201),
-    )
-    log(f"Approved PR #{number} at {sha[:12]} after trusted checks passed.")
-
-
 def admit_to_mergify(number: int) -> None:
     pr = get(f"/repos/{REPO}/pulls/{number}")
     if pr.get("state") != "open":
@@ -495,13 +475,8 @@ def reconcile_pr(pr: dict[str, Any]) -> None:
         log(f"PR #{number} changed while being evaluated; waiting for the next reconciliation.")
         return
 
-    # Renovate and Kilo are distinct identities, so the repair App can provide the trusted review.
-    # Carrier PRs are authored by the same repair App and GitHub correctly forbids self-approval.
-    if kind in {"renovate", "kilo"}:
-        approve_pr(number, sha)
-        if current_head_unchanged(number, sha) is None:
-            return
-
+    # Trusted admission adds eligibility metadata only. It does not approve or merge.
+    # GitHub protections and Mergify remain responsible for review/merge decisions.
     admit_to_mergify(number)
 
 
