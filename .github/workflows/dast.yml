@@ -21,15 +21,94 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 105
     steps:
+      - name: Resolve exact default-branch SHA
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/${REPO}/commits/${DEFAULT_BRANCH}" --jq .sha)"
+          test -n "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
       - name: Refuse unauthorised/non-HTTPS remote target
         shell: bash
         run: |
           set -euo pipefail
           case "$DAST_TARGET_URL" in https://*) ;; *) echo "::error::DAST_TARGET_URL must be an authorised HTTPS endpoint."; exit 1;; esac
       - name: Run authorised ZAP full scan
+        id: zap
+        continue-on-error: true
         uses: zaproxy/action-full-scan@3c58388149901b9a03b7718852c5ba889646c27c # v0.13.0
         with:
           target: ${{ env.DAST_TARGET_URL }}
           allow_issue_writing: false
           fail_action: true
           artifact_name: dast-zap-full-${{ github.run_id }}
+
+      - name: Build exact-run DAST evidence manifest
+        if: always()
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+          ZAP_OUTCOME: ${{ steps.zap.outcome }}
+        run: |
+          jq -n             --arg repository "$GITHUB_REPOSITORY"             --arg sha "$TARGET_SHA"             --arg run_id "$GITHUB_RUN_ID"             --arg run_attempt "$GITHUB_RUN_ATTEMPT"             --arg target "$DAST_TARGET_URL"             --arg scan_outcome "$ZAP_OUTCOME"             '{kind:"dast",repository:$repository,default_sha:$sha,workflow_run_id:$run_id,workflow_run_attempt:$run_attempt,target_url:$target,scan_outcome:$scan_outcome}'             > dast-evidence.json
+
+      - name: Persist DAST manifest to R2
+        id: r2_manifest
+        if: always()
+        continue-on-error: true
+        env:
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          key="repository-evidence/${GITHUB_REPOSITORY}/dast/${TARGET_SHA}/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}/manifest.json"
+          python3 .github/scripts/r2_evidence_upload.py dast-evidence.json "$key"
+
+      - name: Persist generated ZAP reports to R2
+        id: r2_reports
+        if: always()
+        continue-on-error: true
+        env:
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          set -euo pipefail
+          found=0
+          for file in report_html.html report_md.md report_json.json; do
+            if [ -f "$file" ]; then
+              found=1
+              key="repository-evidence/${GITHUB_REPOSITORY}/dast/${TARGET_SHA}/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}/${file}"
+              python3 .github/scripts/r2_evidence_upload.py "$file" "$key"
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "No local ZAP report files were produced; manifest persistence still records the scan outcome."
+          fi
+
+      - name: Enforce DAST R2 persistence
+        if: always()
+        env:
+          MANIFEST_OUTCOME: ${{ steps.r2_manifest.outcome }}
+          REPORTS_OUTCOME: ${{ steps.r2_reports.outcome }}
+        run: |
+          if [ "$MANIFEST_OUTCOME" != success ] || [ "$REPORTS_OUTCOME" != success ]; then
+            echo "::error::DAST completed but R2 evidence persistence failed."
+            exit 1
+          fi
+
+      - name: Enforce ZAP result
+        if: always()
+        env:
+          ZAP_OUTCOME: ${{ steps.zap.outcome }}
+        run: |
+          test "$ZAP_OUTCOME" = success || {
+            echo "::error::OWASP ZAP active scan failed."
+            exit 1
+          }

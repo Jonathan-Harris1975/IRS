@@ -135,6 +135,29 @@ jobs:
       - name: Validate GitHub Actions workflows
         run: .ci-tools/bin/actionlint -color
 
+      - name: Prove actionlint rejects a seeded workflow defect
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe="$(mktemp --suffix=.yml)"
+          trap 'rm -f "$probe"' EXIT
+          cat > "$probe" <<'YAML'
+          name: seeded-actionlint-defect
+          on: push
+          jobs:
+            seeded:
+              steps:
+                - run: echo "this job intentionally has no runs-on"
+          YAML
+          set +e
+          .ci-tools/bin/actionlint -color "$probe"
+          status=$?
+          set -e
+          test "$status" -ne 0 || {
+            echo "::error::Seeded actionlint defect unexpectedly passed."
+            exit 1
+          }
+
   link_integrity:
     name: Lychee link integrity
     continue-on-error: true

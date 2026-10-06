@@ -80,3 +80,19 @@ jobs:
           payload="$(jq -n --arg repository "$REPO" --arg sha "$TARGET_SHA" --arg task "$task" '{repository:$repository,target_sha:$sha,kind:"repository-council",task:$task}')"
           code="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 30 -X POST -H 'Content-Type: application/json' --data "$payload" "$KILO_REPAIR_TRIGGER_URL")"
           [[ "$code" == 2?? ]] || { echo "::error::Kilo Council trigger returned HTTP $code"; exit 1; }
+
+      - name: Build exact-run Council evidence
+        env:
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          jq -n             --arg repository "$GITHUB_REPOSITORY"             --arg sha "$TARGET_SHA"             --arg run_id "$GITHUB_RUN_ID"             --arg run_attempt "$GITHUB_RUN_ATTEMPT"             '{kind:"repository-council",repository:$repository,default_sha:$sha,workflow_run_id:$run_id,workflow_run_attempt:$run_attempt,exact_sha_gates:"passed",council_contract:"dispatched"}'             > council-evidence.json
+
+      - name: Persist Council evidence to R2
+        env:
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          key="repository-evidence/${GITHUB_REPOSITORY}/council/${TARGET_SHA}/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}/council-evidence.json"
+          python3 .github/scripts/r2_evidence_upload.py council-evidence.json "$key"
