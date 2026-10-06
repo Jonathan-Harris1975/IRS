@@ -329,6 +329,15 @@ class Recovery(unittest.TestCase):
             event[key]["user"]["login"] = "repair[bot]"
             self.assertEqual(m.candidate_numbers(event), [7])
 
+    def test_pr_lifecycle_events_trigger_immediate_recovery(self):
+        workflow = (Path(__file__).parents[1] / "workflows/pr-issue-repair.yml").read_text()
+        self.assertIn("pull_request_target:", workflow)
+        for event in ("opened", "reopened", "synchronize", "ready_for_review"):
+            self.assertRegex(workflow, rf"(?m)^    - {event}$")
+        self.assertIn("trusted metadata only", workflow)
+        self.assertIn("ref: ${{ github.event.repository.default_branch }}", workflow)
+        self.assertNotIn("ref: ${{ github.event.pull_request.head.sha }}", workflow)
+
     def test_workflow_authentication_precedes_write_scoped_job(self):
         workflow = (Path(__file__).parents[1] / "workflows/pr-issue-repair.yml").read_text()
         actor_code = workflow.split("        python3 - <<'PYCODE'\n", 1)[1].split(
