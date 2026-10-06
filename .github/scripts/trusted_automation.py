@@ -402,6 +402,22 @@ def admit_to_mergify(number: int) -> None:
     log(f"Admitted PR #{number} to Mergify after exact-head CI, CodeQL and security verification.")
 
 
+def reconcile_explicitly_retired_prs(open_prs: list[dict[str, Any]]) -> None:
+    """Close same-repository PRs only after an explicit retirement label is present."""
+    for pr in open_prs:
+        if not is_same_repo(pr):
+            continue
+        labels = issue_labels(pr)
+        if not labels.intersection({"autonomy:superseded", "autonomy:obsolete"}):
+            continue
+        number = int(pr["number"])
+        request("PATCH", f"/repos/{REPO}/pulls/{number}", {"state": "closed"})
+        for label in ("autonomy:human-hold", "autonomy:repair", "autonomy:admitted", "automation:branch-pr"):
+            if label in labels:
+                encoded = urllib.parse.quote(label, safe="")
+                delete(f"/repos/{REPO}/issues/{number}/labels/{encoded}", expected=(200, 204))
+        log(f"Closed explicitly retired PR #{number}.")
+
 def reconcile_stale_carriers(open_prs: list[dict[str, Any]]) -> None:
     """Close verified retired carriers directly, without waiting for Mergify.
 
@@ -505,6 +521,8 @@ def main() -> int:
     ensure_label("autonomy:admitted", "0E8A16", "Exact-head CI/security verification complete; Mergify may merge")
 
     open_prs = list_open_prs()
+    reconcile_explicitly_retired_prs(open_prs)
+    open_prs = list_open_prs()  # refresh after explicit retirement
     reconcile_stale_carriers(open_prs)
     open_prs = list_open_prs()  # refresh after stale-carrier lifecycle changes
     adopt_linked_kilo_prs(open_prs)
