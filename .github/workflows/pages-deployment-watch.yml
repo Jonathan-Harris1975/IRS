@@ -1,7 +1,7 @@
 name: IRS Cloudflare Pages deployment watch
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] exact-main successful production-verification gate
     workflows: ["Production verification"]
     types: [completed]
   workflow_dispatch:
