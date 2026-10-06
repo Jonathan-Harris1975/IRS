@@ -118,6 +118,12 @@ jobs:
       pull-requests: write
       security-events: read
 'on':
+  pull_request_target: # zizmor: ignore[dangerous-triggers] trusted metadata only; default-branch router never checks out PR code
+    types:
+    - opened
+    - reopened
+    - synchronize
+    - ready_for_review
   workflow_run: # zizmor: ignore[dangerous-triggers] trusted metadata router; PR code is never checked out or executed
     workflows:
     - Production verification
