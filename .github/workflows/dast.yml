@@ -98,10 +98,10 @@ jobs:
           MANIFEST_OUTCOME: ${{ steps.r2_manifest.outcome }}
           REPORTS_OUTCOME: ${{ steps.r2_reports.outcome }}
         run: |
-          test "$MANIFEST_OUTCOME" = success && test "$REPORTS_OUTCOME" = success || {
+          if [ "$MANIFEST_OUTCOME" != success ] || [ "$REPORTS_OUTCOME" != success ]; then
             echo "::error::DAST completed but R2 evidence persistence failed."
             exit 1
-          }
+          fi
 
       - name: Enforce ZAP result
         if: always()
