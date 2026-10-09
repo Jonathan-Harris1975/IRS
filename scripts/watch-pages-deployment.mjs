@@ -12,9 +12,9 @@ const commitSha = env('GITHUB_SHA');
 const maxAttempts = Math.max(1, Number(process.env.CF_DEPLOYMENT_MAX_ATTEMPTS || 40));
 const pollMs = Math.max(5000, Number(process.env.CF_DEPLOYMENT_POLL_MS || 15000));
 
-if (!accountId || !projectName || !token) {
-  console.log('Cloudflare Pages deployment watcher is not configured; skipping.');
-  process.exit(0);
+if (!accountId || !projectName || !token || !/^[0-9a-f]{40}$/i.test(commitSha)) {
+  console.error('Cloudflare Pages deployment watcher requires credentials and a full expected commit SHA.');
+  process.exit(1);
 }
 
 function deploymentSha(item) {
@@ -44,16 +44,24 @@ async function listDeployments() {
 let last = null;
 for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   const deployments = await listDeployments();
-  const production = deployments.filter((item) => item.environment === 'production' && deploymentBranch(item) === 'main');
+  const production = deployments.filter((item) => item.environment === 'production' && deploymentBranch(item) === 'main')
+    .sort((a, b) => Date.parse(b.created_on || b.created_at || 0) - Date.parse(a.created_on || a.created_at || 0));
   const requested = commitSha ? commitSha.trim().toLowerCase() : '';
   const exactMatches = production.filter((item) => {
     const deployed = deploymentSha(item).trim().toLowerCase();
     // A shortened or mismatched hash is not sufficient production-release evidence.
     return /^[0-9a-f]{40}$/.test(deployed) && /^[0-9a-f]{40}$/.test(requested) && deployed === requested;
   });
-  // The Pages API returns newest deployments first, so only the newest exact
-  // match carries a current build stage; older retried builds stay at idle.
-  last = requested ? exactMatches[0] || null : production[0] || null;
+  // Order by deployment creation time rather than relying on API list order.
+  // A previously successful deployment must never attest a newer production release.
+  // Only the latest production deployment can establish current deployed identity.
+  const newestProduction = production[0] || null;
+  last = newestProduction && exactMatches.some((item) => item.id === newestProduction.id)
+    ? newestProduction : null;
+  if (newestProduction && !last) {
+    const newestSha = deploymentSha(newestProduction);
+    console.log(`Latest production deployment SHA ${newestSha || 'missing'} does not match expected SHA; waiting for exact release.`);
+  }
   if (!last) {
     console.log(`Expected IRS production deployment is not visible yet (attempt ${attempt}/${maxAttempts}).`);
     await new Promise((resolve) => setTimeout(resolve, pollMs));
