@@ -47,14 +47,14 @@ test('target health cannot substitute for deployment verification', () => {
 test('optional dispatch is downstream of retained mandatory evidence', () => {
   const evidenceIndex = workflow.indexOf('- name: Upload redirect target audit');
   const dispatchIndex = workflow.indexOf(
-    '- name: Trigger central ecosystem smoke when cross-repository dispatch is configured',
+    '- name: Trigger central ecosystem verification when cross-repository dispatch is configured',
   );
   assert.ok(evidenceIndex > 0 && dispatchIndex > evidenceIndex);
   const dispatch = stepBody(
-    'Trigger central ecosystem smoke when cross-repository dispatch is configured',
+    'Trigger central ecosystem verification when cross-repository dispatch is configured',
   );
   assert.match(dispatch, /exit 0/);
-  assert.match(dispatch, /optional cross-repository MAST dispatch was skipped/);
+  assert.match(dispatch, /cross-repository MAST OIDC verification dispatch was skipped/);
 });
 
 test('the deployment watch window covers slow Pages builds without exceeding the job timeout', () => {
@@ -82,7 +82,9 @@ test('production deployment watcher rejects missing or non-main branch metadata'
 
 test('production deployment watcher tracks the newest exact-SHA build', () => {
   const watcher = fs.readFileSync('scripts/watch-pages-deployment.mjs', 'utf8');
-  assert.match(watcher, /exactMatches\[0\]/);
+  assert.match(watcher, /newestProduction = production\[0\]/);
+  assert.match(watcher, /exactMatches\.some\(/);
+  assert.match(watcher, /\.sort\(/);
   assert.doesNotMatch(watcher, /production\.find\(/);
 });
 
