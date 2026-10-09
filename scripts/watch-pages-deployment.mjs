@@ -44,15 +44,15 @@ async function listDeployments() {
 let last = null;
 for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   const deployments = await listDeployments();
-  const production = deployments.filter((item) => item.environment === 'production' && deploymentBranch(item) === 'main');
+  const production = deployments.filter((item) => item.environment === 'production' && deploymentBranch(item) === 'main')
+    .sort((a, b) => Date.parse(b.created_on || b.created_at || 0) - Date.parse(a.created_on || a.created_at || 0));
   const requested = commitSha ? commitSha.trim().toLowerCase() : '';
   const exactMatches = production.filter((item) => {
     const deployed = deploymentSha(item).trim().toLowerCase();
     // A shortened or mismatched hash is not sufficient production-release evidence.
     return /^[0-9a-f]{40}$/.test(deployed) && /^[0-9a-f]{40}$/.test(requested) && deployed === requested;
   });
-  // The Pages API returns newest deployments first, so only the newest exact
-  // match carries a current build stage; older retried builds stay at idle.
+  // Order by deployment creation time rather than relying on API list order.
   // A previously successful deployment must never attest a newer production release.
   // Only the latest production deployment can establish current deployed identity.
   const newestProduction = production[0] || null;
