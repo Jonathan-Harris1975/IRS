@@ -80,6 +80,12 @@ test('production deployment watcher rejects missing or non-main branch metadata'
   assert.match(watcher, /environment === 'production'/);
 });
 
+test('production deployment watcher tracks the newest exact-SHA build', () => {
+  const watcher = fs.readFileSync('scripts/watch-pages-deployment.mjs', 'utf8');
+  assert.match(watcher, /exactMatches\[0\]/);
+  assert.doesNotMatch(watcher, /production\.find\(/);
+});
+
 test('automatic deployment watch only trusts completed main runs from this repository', () => {
   assert.match(workflow, /workflow_run\.head_branch == 'main'/);
   assert.match(workflow, /workflow_run\.head_repository\.full_name == github\.repository/);
