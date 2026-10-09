@@ -85,23 +85,23 @@ jobs:
             reports/deployment-attestation.json
           if-no-files-found: error
           retention-days: 90
-      - name: Trigger central ecosystem smoke when cross-repository dispatch is configured
+      - name: Trigger central ecosystem OIDC verification when cross-repository dispatch is configured
         env:
-          ECOSYSTEM_SMOKE_DISPATCH_TOKEN: ${{ secrets.ECOSYSTEM_SMOKE_DISPATCH_TOKEN }}
-          ECOSYSTEM_SMOKE_REPOSITORY: ${{ vars.ECOSYSTEM_SMOKE_REPOSITORY }}
+          ECOSYSTEM_OIDC_DISPATCH_TOKEN: ${{ secrets.ECOSYSTEM_OIDC_DISPATCH_TOKEN }}
+          ECOSYSTEM_OIDC_REPOSITORY: ${{ vars.ECOSYSTEM_OIDC_REPOSITORY }}
           SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           set -euo pipefail
-          if [ -z "${ECOSYSTEM_SMOKE_DISPATCH_TOKEN:-}" ]; then
-            echo "::warning::ECOSYSTEM_SMOKE_DISPATCH_TOKEN is not configured in IRS; deployment and redirect-target verification are complete, but the optional cross-repository MAST dispatch was skipped."
+          if [ -z "${ECOSYSTEM_OIDC_DISPATCH_TOKEN:-}" ]; then
+            echo "::warning::ECOSYSTEM_OIDC_DISPATCH_TOKEN is not configured in IRS; deployment and redirect-target verification are complete, but the cross-repository MAST OIDC verification dispatch was skipped."
             exit 0
           fi
-          target="${ECOSYSTEM_SMOKE_REPOSITORY:-${GITHUB_REPOSITORY_OWNER}/MAST}"
+          target="${ECOSYSTEM_OIDC_REPOSITORY:-${GITHUB_REPOSITORY_OWNER}/MAST}"
           payload="$(jq -cn --arg ref main --arg repo "$GITHUB_REPOSITORY" --arg sha "$SOURCE_SHA" '{ref:$ref,inputs:{source_repository:$repo,source_sha:$sha}}')"
           curl --fail-with-body --silent --show-error \
             --request POST \
-            --header "Authorization: Bearer ${ECOSYSTEM_SMOKE_DISPATCH_TOKEN}" \
+            --header "Authorization: Bearer ${ECOSYSTEM_OIDC_DISPATCH_TOKEN}" \
             --header "Accept: application/vnd.github+json" \
             --header "X-GitHub-Api-Version: 2022-11-28" \
             --data "$payload" \
-            "https://api.github.com/repos/${target}/actions/workflows/ecosystem-smoke.yml/dispatches"
+            "https://api.github.com/repos/${target}/actions/workflows/ecosystem-oidc.yml/dispatches"
