@@ -21,6 +21,12 @@ function deploymentSha(item) {
   return item?.deployment_trigger?.metadata?.commit_hash || item?.source?.config?.commit_hash || '';
 }
 
+function deploymentBranch(item) {
+  return String(item?.deployment_trigger?.metadata?.branch
+    || item?.source?.config?.production_branch
+    || item?.source?.config?.branch || '').trim();
+}
+
 function stageStatus(item) {
   return String(item?.latest_stage?.status || item?.stages?.at?.(-1)?.status || '').toLowerCase();
 }
@@ -38,7 +44,7 @@ async function listDeployments() {
 let last = null;
 for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   const deployments = await listDeployments();
-  const production = deployments.filter((item) => item.environment === 'production');
+  const production = deployments.filter((item) => item.environment === 'production' && deploymentBranch(item) === 'main');
   last = commitSha
     ? production.find((item) => {
         const deployed = deploymentSha(item).trim().toLowerCase();
