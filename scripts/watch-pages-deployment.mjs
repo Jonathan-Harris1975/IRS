@@ -45,14 +45,15 @@ let last = null;
 for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   const deployments = await listDeployments();
   const production = deployments.filter((item) => item.environment === 'production' && deploymentBranch(item) === 'main');
-  last = commitSha
-    ? production.find((item) => {
-        const deployed = deploymentSha(item).trim().toLowerCase();
-        const expected = commitSha.trim().toLowerCase();
-        // A shortened or mismatched hash is not sufficient production-release evidence.
-        return /^[0-9a-f]{40}$/.test(deployed) && /^[0-9a-f]{40}$/.test(expected) && deployed === expected;
-      }) || null
-    : production[0] || null;
+  const requested = commitSha ? commitSha.trim().toLowerCase() : '';
+  const exactMatches = production.filter((item) => {
+    const deployed = deploymentSha(item).trim().toLowerCase();
+    // A shortened or mismatched hash is not sufficient production-release evidence.
+    return /^[0-9a-f]{40}$/.test(deployed) && /^[0-9a-f]{40}$/.test(requested) && deployed === requested;
+  });
+  // The Pages API returns newest deployments first, so only the newest exact
+  // match carries a current build stage; older retried builds stay at idle.
+  last = requested ? exactMatches[0] || null : production[0] || null;
   if (!last) {
     console.log(`Expected IRS production deployment is not visible yet (attempt ${attempt}/${maxAttempts}).`);
     await new Promise((resolve) => setTimeout(resolve, pollMs));
