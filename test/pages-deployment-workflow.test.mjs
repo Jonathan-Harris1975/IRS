@@ -72,3 +72,10 @@ test('the deployment watch window covers slow Pages builds without exceeding the
     'the watch window must fit inside the job timeout',
   );
 });
+
+test('production deployment watcher rejects missing or non-main branch metadata', () => {
+  const watcher = fs.readFileSync('scripts/watch-pages-deployment.mjs', 'utf8');
+  assert.match(watcher, /deploymentBranch\(item\) === 'main'/);
+  assert.match(watcher, /deployment_trigger\?\.metadata\?\.branch/);
+  assert.match(watcher, /environment === 'production'/);
+});
