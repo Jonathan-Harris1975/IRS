@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: irs-pages-deployment-watch
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   watch:
