@@ -79,3 +79,8 @@ test('production deployment watcher rejects missing or non-main branch metadata'
   assert.match(watcher, /deployment_trigger\?\.metadata\?\.branch/);
   assert.match(watcher, /environment === 'production'/);
 });
+
+test('automatic deployment watch only trusts completed main runs from this repository', () => {
+  assert.match(workflow, /workflow_run\.head_branch == 'main'/);
+  assert.match(workflow, /workflow_run\.head_repository\.full_name == github\.repository/);
+});
