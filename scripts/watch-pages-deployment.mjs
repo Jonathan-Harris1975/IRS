@@ -43,7 +43,8 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     ? production.find((item) => {
         const deployed = deploymentSha(item).trim().toLowerCase();
         const expected = commitSha.trim().toLowerCase();
-        return deployed && expected && (deployed.startsWith(expected) || expected.startsWith(deployed));
+        // A shortened or mismatched hash is not sufficient production-release evidence.
+        return /^[0-9a-f]{40}$/.test(deployed) && /^[0-9a-f]{40}$/.test(expected) && deployed === expected;
       }) || null
     : production[0] || null;
   if (!last) {
