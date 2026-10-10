@@ -81,6 +81,7 @@ jobs:
         with:
           name: irs-live-target-audit-${{ github.event.workflow_run.head_sha || github.sha }}
           path: |
+            reports/pages-deployment.json
             reports/irs-target-audit.json
             reports/deployment-attestation.json
           if-no-files-found: error
