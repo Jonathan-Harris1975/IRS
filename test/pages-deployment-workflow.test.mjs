@@ -92,3 +92,10 @@ test('automatic deployment watch only trusts completed main runs from this repos
   assert.match(workflow, /workflow_run\.head_branch == 'main'/);
   assert.match(workflow, /workflow_run\.head_repository\.full_name == github\.repository/);
 });
+
+test('MAST OIDC dispatch uses only supported workflow_dispatch fields', () => {
+  const dispatch = stepBody('Trigger central ecosystem verification when cross-repository dispatch is configured');
+  assert.match(dispatch, /payload='\{"ref":"main"\}'/);
+  assert.doesNotMatch(dispatch, /inputs:\s*\{/);
+  assert.match(dispatch, /ECOSYSTEM_OIDC_WORKFLOW/);
+});

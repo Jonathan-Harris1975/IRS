@@ -102,7 +102,9 @@ jobs:
             echo '::error::ECOSYSTEM_OIDC_WORKFLOW must identify a verified workflow in the destination repository.'
             exit 1
           fi
-          payload="$(jq -cn --arg ref main --arg repo "$GITHUB_REPOSITORY" --arg sha "$SOURCE_SHA" '{ref:$ref,inputs:{source_repository:$repo,source_sha:$sha}}')"
+          # MAST oidc-readiness.yml declares workflow_dispatch without inputs.
+          # Passing undeclared source_repository/source_sha inputs yields HTTP 422.
+          payload='{"ref":"main"}'
           curl --fail-with-body --silent --show-error \
             --request POST \
             --header "Authorization: Bearer ${ECOSYSTEM_OIDC_DISPATCH_TOKEN}" \
