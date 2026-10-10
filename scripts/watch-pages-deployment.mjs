@@ -32,13 +32,30 @@ function stageStatus(item) {
 }
 
 async function listDeployments() {
-  const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/deployments`, {
-    headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
-  });
-  if (!response.ok) throw new Error(`Cloudflare Pages API returned HTTP ${response.status}`);
-  const body = await response.json();
-  if (!body?.success || !Array.isArray(body.result)) throw new Error('Cloudflare Pages API returned an invalid deployment list');
-  return body.result;
+  const all = [];
+  const seen = new Set();
+  // Cloudflare lists are paginated. A stale first page must not certify a release.
+  for (let page = 1; page <= 20; page += 1) {
+    const endpoint = new URL(`https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${encodeURIComponent(projectName)}/deployments`);
+    endpoint.searchParams.set('page', String(page));
+    endpoint.searchParams.set('per_page', '100');
+    const response = await fetch(endpoint, {
+      headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!response.ok) throw new Error(`Cloudflare Pages API returned HTTP ${response.status}`);
+    const body = await response.json();
+    if (!body?.success || !Array.isArray(body.result)) throw new Error('Cloudflare Pages API returned an invalid deployment list');
+    for (const item of body.result) {
+      if (!item?.id || seen.has(item.id)) continue;
+      seen.add(item.id);
+      all.push(item);
+    }
+    const totalPages = Number(body.result_info?.total_pages);
+    if (Number.isInteger(totalPages) && totalPages > 20) throw new Error('Cloudflare deployment history exceeds bounded pagination limit');
+    if (Number.isInteger(totalPages) && totalPages > 0 ? page >= totalPages : body.result.length < 100) return all;
+  }
+  throw new Error('Cloudflare deployment pagination limit reached without exhausting history');
 }
 
 let last = null;
