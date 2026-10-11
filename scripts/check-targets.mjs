@@ -106,10 +106,16 @@ function readPreviousStatus() {
 }
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
-const MAX_REDIRECTS = 5;
+// Allows five redirect hops (up to six requests including the initial target).
+const MAX_REDIRECT_HOPS = 5;
 
 export async function fetchAuthorisedTarget(target, init, fetchImpl = fetch) {
-  let current = new URL(target).toString();
+  let current;
+  try {
+    current = new URL(target).toString();
+  } catch {
+    return { response: null, finalUrl: null, error: 'invalid-target-url' };
+  }
   for (let redirects = 0; ; redirects += 1) {
     if (!isAuthorisedUrl(current)) {
       return { response: null, finalUrl: null, error: 'unauthorised-redirect-host' };
@@ -122,7 +128,7 @@ export async function fetchAuthorisedTarget(target, init, fetchImpl = fetch) {
     const location = response.headers.get('location');
     await response.body?.cancel().catch(() => {});
     if (!location) return { response: null, finalUrl: null, error: 'redirect-location-missing' };
-    if (redirects >= MAX_REDIRECTS) return { response: null, finalUrl: null, error: 'too-many-redirects' };
+    if (redirects >= MAX_REDIRECT_HOPS) return { response: null, finalUrl: null, error: 'too-many-redirects' };
 
     let next;
     try {
