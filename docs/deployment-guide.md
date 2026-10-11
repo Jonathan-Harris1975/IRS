@@ -11,6 +11,7 @@
 | Build command | `npm ci --ignore-scripts && npm run verify` |
 | Build output directory | `public` |
 | Custom domain | `images.jonathan-harris.online` |
+| GitHub connection | Cloudflare GitHub App scoped to IRS; production branch `main` |
 
 IRS is a static Cloudflare Pages service. No runtime application secret is required to serve redirects. Deployment-watcher and operational-notification credentials exist only in GitHub Actions and are not part of the published `public/` directory.
 
@@ -35,7 +36,7 @@ CI keeps these concerns separate: deterministic verification is required, and a 
 
 ## Deployment and post-deployment verification
 
-Cloudflare Pages publishes `public/` from `main`. The automatic post-release workflow requires `CF_ACCOUNT_ID`, `CF_PAGES_PROJECT_NAME` and `CF_PAGES_API_TOKEN`; missing configuration fails closed. The watcher must observe a production deployment matching the workflow source SHA before the workflow can write an attestation.
+Cloudflare Pages publishes `public/` from `main` through the Cloudflare GitHub App. The automatic post-release workflow reads the App's `Cloudflare Pages` check for the exact workflow source SHA using `GITHUB_TOKEN` with `checks:read` and `contents:read`. No Cloudflare API token is stored in GitHub Actions. A missing provider check, untrusted check app, mismatched SHA, failure, or timeout prevents the attestation.
 
 After deployment:
 
@@ -47,7 +48,7 @@ After deployment:
 
 A green `/health.json` proves static/site liveness only. Downstream target health comes from the live audit and its freshness signal.
 
-Run `npm test` to exercise the deterministic deployment-workflow contract without Cloudflare credentials. The live Pages watcher is intentionally confined to the authorised post-release workflow. If it fails, check the named configuration item, token read scope, account/project identifiers and the expected workflow SHA; do not use target-audit success as a substitute for deployment verification.
+Run `npm test` to exercise the deterministic deployment-workflow contract without provider credentials. The live Pages watcher is intentionally confined to the authorised post-release workflow. If it fails, confirm that the Cloudflare GitHub App is connected to IRS and that the exact-SHA `Cloudflare Pages` check completed successfully; do not use target-audit success as a substitute for deployment verification.
 
 ## Scheduled dependency verification
 
