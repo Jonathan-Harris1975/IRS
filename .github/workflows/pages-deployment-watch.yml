@@ -5,6 +5,7 @@ on:
     workflows: ["Production verification"]
     types: [completed]
 permissions:
+  checks: read
   contents: read
 
 concurrency:
@@ -31,33 +32,16 @@ jobs:
         run: |
           test "$(node --version)" = "v24.21.0"
           test "$(npm --version)" = "10.9.9"
-      - name: Check Cloudflare Pages deployment-watch configuration
-        id: pages_config
+      - name: Watch the exact-SHA Cloudflare Pages provider check
         env:
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          CF_PAGES_PROJECT_NAME: ${{ secrets.CF_PAGES_PROJECT_NAME }}
-          CF_PAGES_API_TOKEN: ${{ secrets.CF_PAGES_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          missing=()
-          for name in CF_ACCOUNT_ID CF_PAGES_PROJECT_NAME CF_PAGES_API_TOKEN; do
-            if [ -z "${!name:-}" ]; then
-              missing+=("$name")
-            fi
-          done
-          if [ "${#missing[@]}" -gt 0 ]; then
-            printf '::error::Cloudflare Pages deployment verification cannot run. Missing required configuration: %s\n' "${missing[*]}"
-            exit 1
-          fi
-          echo "configured=true" >> "$GITHUB_OUTPUT"
-      - name: Watch the production Pages deployment
-        env:
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          CF_PAGES_PROJECT_NAME: ${{ secrets.CF_PAGES_PROJECT_NAME }}
-          CF_PAGES_API_TOKEN: ${{ secrets.CF_PAGES_API_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
           OPS_ALERT_WEBHOOK_URL: ${{ secrets.OPS_ALERT_WEBHOOK_URL }}
           OPS_ALERT_WEBHOOK_TOKEN: ${{ secrets.OPS_ALERT_WEBHOOK_TOKEN }}
           GITHUB_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          CF_DEPLOYMENT_MAX_ATTEMPTS: '70'
+          CF_DEPLOYMENT_POLL_MS: '15000'
           CF_DEPLOYMENT_MAX_ATTEMPTS: '70'
           CF_DEPLOYMENT_POLL_MS: '15000'
         run: npm run watch:pages
