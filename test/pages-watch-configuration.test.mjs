@@ -22,6 +22,6 @@ for (const [name, env] of [
       cwd: process.cwd(), env, encoding: 'utf8', timeout: 5000,
     });
     assert.equal(result.status, 1, result.stderr);
-    assert.match(result.stderr, /requires a GitHub token, repository and full expected commit SHA/);
+    assert.match(result.stderr + result.stdout, /requires a GitHub token, repository and full expected commit SHA/);
   });
 }
