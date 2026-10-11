@@ -28,6 +28,21 @@ test('declared length prefers Content-Range totals and handles missing length', 
   assert.equal(declaredLength(new Response(null)), null);
 });
 
+test('malformed target URLs return a structured error without a request', async () => {
+  let requests = 0;
+  const result = await fetchAuthorisedTarget('not a URL', {}, async () => {
+    requests += 1;
+    throw new Error('fetch must not run');
+  });
+
+  assert.deepEqual(result, {
+    response: null,
+    finalUrl: null,
+    error: 'invalid-target-url',
+  });
+  assert.equal(requests, 0);
+});
+
 
 test('redirects to unauthorised hosts are rejected before a second request', async () => {
   const requested = [];
