@@ -87,6 +87,9 @@ export async function listDeploymentChecks(config, deps = {}) {
 
 export function selectDeploymentCheck(checkRuns, config) {
   const matches = checkRuns.filter((run) => run?.name === config.checkName && run?.app?.slug === config.appSlug);
+  // Fail closed if any exact-name/app result has malformed identity metadata. This
+  // intentionally prevents falling back to an older success when the provider has
+  // returned a corrupt newer run; this can temporarily block releases until corrected.
   for (const run of matches) {
     if (run.head_sha?.toLowerCase() !== config.commitSha || !Number.isSafeInteger(run.id) || run.id <= 0 ||
         !Number.isFinite(Date.parse(run.created_at)) || !['queued', 'in_progress', 'completed'].includes(run.status)) {
