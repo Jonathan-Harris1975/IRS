@@ -78,9 +78,9 @@ The live audit report is written to `reports/irs-target-audit.json`; the compact
 4. Run `npm run verify:release` before production release.
 5. Use the normal pull-request/CI route. CI independently re-probes every governed destination before the exact-SHA release gate.
 6. Cloudflare Pages publishes `public/` from `main` after the configured production checks.
-7. The post-release workflow requires `CF_ACCOUNT_ID`, `CF_PAGES_PROJECT_NAME` and `CF_PAGES_API_TOKEN`; a missing value fails the workflow rather than skipping exact-SHA verification.
+7. Connect this repository to Cloudflare Pages through the Cloudflare GitHub App, scoped to IRS and production branch `main`. The post-release workflow verifies the App's exact-SHA `Cloudflare Pages` check with a least-privilege GitHub token; it requires no Cloudflare API secret.
 8. After deployment, confirm `/health.json`, representative redirects, the exact-SHA deployment attestation and the latest target-audit status.
 
-The Pages watcher and live target audit are separate mandatory controls: the watcher proves the expected source SHA reached production, while the target audit proves the authorised image destinations are healthy. Run `npm test` locally to execute the deterministic workflow contract checks; live provider verification remains in the authorised post-release workflow.
+The Pages watcher and live target audit are separate mandatory controls: the watcher accepts only a successful `Cloudflare Pages` check from the Cloudflare GitHub App on the exact expected source SHA, while the target audit proves the authorised image destinations are healthy. If the provider check is missing, pending too long, or fails, the deployment workflow fails closed. Run `npm test` locally to execute the deterministic workflow contract checks; live provider verification remains in the authorised post-release workflow.
 
 Rollback and post-deployment checks are documented in [`docs/deployment-guide.md`](docs/deployment-guide.md). Security controls and the redirect trust boundary are documented in [`SECURITY.md`](SECURITY.md).
