@@ -41,6 +41,7 @@ function fixture(responses) {
       assert.equal(url.origin, 'https://api.github.com');
       assert.match(url.pathname, /\/repos\/Jonathan-Harris1975\/IRS\/commits\/[a-f0-9]{40}\/check-runs$/);
       assert.equal(url.searchParams.get('per_page'), '100');
+      assert.ok(url.searchParams.get('page'));
       assert.equal(options.redirect, 'error');
       assert.ok(options.signal instanceof AbortSignal);
       assert.equal(options.headers.authorization, 'Bearer fixture-token');
@@ -128,7 +129,37 @@ test('permission failures are surfaced without retry', async () => {
 
 test('invalid and oversized responses fail closed', async () => {
   await assert.rejects(listDeploymentChecks(config, fixture([Response.json({})])));
-  await assert.rejects(listDeploymentChecks(config, fixture([Response.json({ total_count: 101, check_runs: Array.from({ length: 100 }, () => check()) })])));
+  await assert.rejects(listDeploymentChecks(config, fixture([
+    Response.json({ total_count: 101, check_runs: Array.from({ length: 100 }, (_, i) => check({ id: i + 1 })) }),
+    Response.json({ total_count: 101, check_runs: [] }),
+  ])), /did not return all check-run pages/);
+});
+
+test('check runs paginate safely beyond the first 100 results', async () => {
+  const firstPage = Array.from({ length: 100 }, (_, index) => check({ id: index + 1 }));
+  const secondPage = [check({ id: 101, conclusion: 'failure' })];
+  const mock = fixture([
+    Response.json({ total_count: 101, check_runs: firstPage }),
+    Response.json({ total_count: 101, check_runs: secondPage }),
+  ]);
+  const runs = await listDeploymentChecks(config, mock);
+  assert.equal(runs.length, 101);
+  assert.equal(mock.calls[0].url.searchParams.get('page'), '1');
+  assert.equal(mock.calls[1].url.searchParams.get('page'), '2');
+});
+
+test('programming TypeError fails immediately while a coded network error retries', async () => {
+  const programmingError = new TypeError('config.token is undefined');
+  const programming = fixture([programmingError]);
+  await assert.rejects(watchDeployment(config, programming), /config.token is undefined/);
+  assert.equal(programming.calls.length, 1);
+  assert.deepEqual(programming.waits, []);
+
+  const networkCause = Object.assign(new Error('connection reset'), { code: 'ECONNRESET' });
+  const networkError = new TypeError('fetch failed', { cause: networkCause });
+  const network = fixture([networkError, response([check()])]);
+  assert.equal((await watchDeployment(config, network)).status, 'success');
+  assert.deepEqual(network.waits, [5000]);
 });
 
 test('watch timeout is bounded and does not sleep after its final attempt', async () => {
