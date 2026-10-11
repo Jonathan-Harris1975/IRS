@@ -103,17 +103,13 @@ A target failure also causes the scheduled GitHub Actions job to fail after the 
 
 ## Cloudflare Pages deployment watcher
 
-After successful production verification on `main`, the watcher queries the Cloudflare Pages deployments API and follows the matching production deployment. It alerts operations on failure or timeout. Required GitHub secrets:
+After successful production verification on `main`, the watcher polls GitHub Checks for the exact source SHA. It accepts only the newest `Cloudflare Pages` check from the `cloudflare-workers-and-pages` GitHub App. A pending check is polled for a bounded 17.5 minutes; failure, timeout, missing evidence, ambiguous results, wrong SHA, or an unexpected app blocks the attestation and emits a critical operations event.
 
-- `CF_ACCOUNT_ID`
-- `CF_PAGES_PROJECT_NAME`
-- `CF_PAGES_API_TOKEN`, scoped for Pages deployment read access
-- `OPS_ALERT_WEBHOOK_URL`
-- `OPS_ALERT_WEBHOOK_TOKEN`
+The workflow needs only the automatically provided `GITHUB_TOKEN` with `checks:read` and `contents:read`. Cloudflare account ID, project name, and API token secrets are no longer required in GitHub Actions. The Cloudflare Pages project must be connected to this repository through the Cloudflare GitHub App, scoped to IRS, with `main` as the production branch. Do not merge this watcher change until that provider check is visible for an IRS commit.
 
-The first three Cloudflare values are mandatory for automatic production attestation. If any is absent, the workflow reports only the missing variable names and fails before the watcher, target audit or attestation can be presented as green. A successful attestation is written only after both the exact-SHA Pages watch and the live target audit pass, and the combined evidence is retained for 90 days.
+The provider check proves the Cloudflare deployment reached the expected commit. The separate live redirect-target audit still verifies the authorised destinations, and both gates must pass before the exact-SHA attestation is retained. Run `npm test` for credential-free workflow contract checks.
 
-Alert webhook delivery and the central ecosystem smoke dispatch are separate from release integrity. The optional dispatch uses `ECOSYSTEM_SMOKE_DISPATCH_TOKEN` and `ECOSYSTEM_SMOKE_REPOSITORY`; it may be skipped after mandatory verification without changing the Pages attestation result. Run `npm test` for credential-free workflow contract checks. For a failed watcher, confirm the three Cloudflare secret names are configured, verify token scope and project name, then rerun the post-release workflow for the same expected SHA.
+
 
 ## Authoritative change procedure
 
