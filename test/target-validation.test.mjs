@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { declaredLength, isAuthorisedUrl, isImageContentType, looksLikeImage } from '../scripts/check-targets.mjs';
+import { declaredLength, fetchAuthorisedTarget, isAuthorisedUrl, isImageContentType, looksLikeImage } from '../scripts/check-targets.mjs';
 
 test('final target URL must remain HTTPS on the authorised host', () => {
   assert.equal(isAuthorisedUrl('https://ik.imagekit.io/7lx48g355/example.webp'), true);
@@ -26,4 +26,59 @@ test('declared length prefers Content-Range totals and handles missing length', 
   assert.equal(declaredLength(new Response(null, { headers: { 'content-range': 'bytes 0-511/2048', 'content-length': '512' } })), 2048);
   assert.equal(declaredLength(new Response(null, { headers: { 'content-length': '1024' } })), 1024);
   assert.equal(declaredLength(new Response(null)), null);
+});
+
+test('malformed target URLs return a structured error without a request', async () => {
+  let requests = 0;
+  const result = await fetchAuthorisedTarget('not a URL', {}, async () => {
+    requests += 1;
+    throw new Error('fetch must not run');
+  });
+
+  assert.deepEqual(result, {
+    response: null,
+    finalUrl: null,
+    error: 'invalid-target-url',
+  });
+  assert.equal(requests, 0);
+});
+
+
+test('redirects to unauthorised hosts are rejected before a second request', async () => {
+  const requested = [];
+  const result = await fetchAuthorisedTarget('https://ik.imagekit.io/start.webp', {}, async (url, options) => {
+    requested.push({ url: String(url), redirect: options.redirect });
+    return new Response(null, { status: 302, headers: { location: 'https://attacker.example/pixel.webp' } });
+  });
+
+  assert.equal(result.error, 'unauthorised-redirect-host');
+  assert.deepEqual(requested, [{ url: 'https://ik.imagekit.io/start.webp', redirect: 'manual' }]);
+});
+
+test('authorised same-host redirects are followed and bounded', async () => {
+  const requested = [];
+  const result = await fetchAuthorisedTarget('https://ik.imagekit.io/start.webp', {}, async (url, options) => {
+    requested.push({ url: String(url), redirect: options.redirect });
+    if (requested.length === 1) {
+      return new Response(null, { status: 302, headers: { location: '/final.webp' } });
+    }
+    return new Response('image', { status: 200, headers: { 'content-type': 'image/webp' } });
+  });
+
+  assert.equal(result.error, null);
+  assert.equal(result.finalUrl, 'https://ik.imagekit.io/final.webp');
+  assert.equal(result.response.status, 200);
+  assert.equal(requested.length, 2);
+  assert.ok(requested.every((item) => item.redirect === 'manual'));
+});
+
+test('redirect loops stop at the configured hop limit', async () => {
+  let requests = 0;
+  const result = await fetchAuthorisedTarget('https://ik.imagekit.io/loop.webp', {}, async () => {
+    requests += 1;
+    return new Response(null, { status: 302, headers: { location: '/loop.webp' } });
+  });
+
+  assert.equal(result.error, 'too-many-redirects');
+  assert.equal(requests, 6);
 });
