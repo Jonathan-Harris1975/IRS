@@ -1,101 +1,106 @@
-const MAX_PAGES = 20;
-const PER_PAGE = 20;
 const SHA = /^[a-f0-9]{40}$/i;
+const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const CHECK_NAME = 'Cloudflare Pages';
+const APP_SLUG = 'cloudflare-workers-and-pages';
+const API_ROOT = 'https://api.github.com';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function watchConfiguration(env) {
   const read = (name) => String(env[name] || '').trim();
-  if (!read('CF_ACCOUNT_ID') || !read('CF_PAGES_PROJECT_NAME') || !read('CF_PAGES_API_TOKEN') || !SHA.test(read('GITHUB_SHA'))) {
-    throw new Error('Cloudflare Pages deployment watcher requires credentials and a full expected commit SHA.');
+  if (!read('GITHUB_TOKEN') || !REPOSITORY.test(read('GITHUB_REPOSITORY')) || !SHA.test(read('GITHUB_SHA'))) {
+    throw new Error('Cloudflare Pages watcher requires a GitHub token, repository and full expected commit SHA.');
   }
   const integer = (name, fallback, min, max) => {
     const value = Number(env[name] ?? fallback);
-    if (!Number.isInteger(value) || value < min || value > max) throw new Error(`Invalid ${name}`);
+    if (!Number.isInteger(value) || value < min || value > max) throw new Error('Invalid ' + name);
     return value;
   };
   return {
-    accountId: read('CF_ACCOUNT_ID'), projectName: read('CF_PAGES_PROJECT_NAME'), token: read('CF_PAGES_API_TOKEN'),
+    token: read('GITHUB_TOKEN'),
+    repository: read('GITHUB_REPOSITORY'),
     commitSha: read('GITHUB_SHA').toLowerCase(),
+    checkName: CHECK_NAME,
+    appSlug: APP_SLUG,
     maxAttempts: integer('CF_DEPLOYMENT_MAX_ATTEMPTS', 40, 1, 70),
     pollMs: integer('CF_DEPLOYMENT_POLL_MS', 15000, 5000, 30000),
     budgetMs: integer('CF_DEPLOYMENT_BUDGET_MS', 1080000, 1000, 1080000),
   };
 }
 
-export async function listDeployments(config, deps = {}) {
+export async function listDeploymentChecks(config, deps = {}) {
+  const url = new URL(API_ROOT + '/repos/' + config.repository + '/commits/' + config.commitSha + '/check-runs');
+  url.searchParams.set('per_page', '100');
   const now = deps.now || Date.now;
-  const wait = deps.sleep || sleep;
-  const deadline = deps.deadline ?? now() + config.budgetMs;
-  const records = new Map();
-  for (let page = 1; page <= MAX_PAGES; page += 1) {
-    const url = new URL(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(config.accountId)}`
-      + `/pages/projects/${encodeURIComponent(config.projectName)}/deployments`);
-    url.searchParams.set('page', String(page));
-    url.searchParams.set('per_page', String(PER_PAGE));
-    url.searchParams.set('env', 'production');
-    let body;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const remaining = deadline - now();
-      if (remaining <= 0) throw new Error('Cloudflare watch deadline exceeded');
-      let delay = 1000 * 2 ** attempt;
-      try {
-        const response = await (deps.fetch || fetch)(url, {
-          headers: { authorization: `Bearer ${config.token}`, accept: 'application/json' },
-          redirect: 'error', signal: AbortSignal.timeout(Math.min(15000, remaining)),
-        });
-        if (!response.ok) {
-          await response.body?.cancel();
-          const error = new Error(`Cloudflare Pages API returned HTTP ${response.status}`);
-          error.retryable = response.status === 429 || response.status >= 500;
-          const value = response.headers.get('retry-after');
-          const retryMs = value && Number.isFinite(Number(value)) ? Number(value) * 1000 : Date.parse(value || '') - now();
-          if (Number.isFinite(retryMs)) delay = Math.max(delay, Math.min(30000, Math.max(0, retryMs)));
-          throw error;
-        }
-        body = await response.json();
-        if (body?.success !== true || !Array.isArray(body.result)) throw new Error('Invalid Cloudflare deployment list');
-        break;
-      } catch (error) {
-        const retryable = error.retryable || ['TimeoutError', 'AbortError', 'TypeError'].includes(error.name);
-        if (!retryable || attempt === 2) {
-          // Never include provider bodies or arbitrary transport diagnostics in retained evidence.
-          throw new Error(/^Cloudflare Pages API returned HTTP/.test(error.message)
-            ? error.message : `Cloudflare request failed: ${error.name}`);
-        }
-        if (now() + delay >= deadline) throw new Error('Cloudflare watch deadline exceeded');
-        await wait(delay);
-      }
-    }
-    const info = body.result_info;
-    if (info?.page !== undefined && info.page !== page) throw new Error('Cloudflare returned a wrong or repeated page');
-    const total = info?.total_pages;
-    if (total !== undefined && (!Number.isInteger(total) || total < 0)) throw new Error('Invalid pagination metadata');
-    if (total > MAX_PAGES) throw new Error('Cloudflare deployment history exceeds bounded pagination limit');
-    for (const item of body.result) {
-      if (!item || typeof item.id !== 'string' || !item.id) throw new Error('Invalid deployment identity');
-      if (records.has(item.id) && JSON.stringify(records.get(item.id)) !== JSON.stringify(item)) throw new Error('Conflicting deployment identity');
-      records.set(item.id, item);
-    }
-    const complete = total !== undefined ? page >= total : body.result.length < PER_PAGE;
-    if (complete) return [...records.values()];
+  const remaining = (deps.deadline ?? now() + config.budgetMs) - now();
+  if (remaining <= 0) throw new Error('GitHub deployment check deadline exceeded');
+  const response = await (deps.fetch || fetch)(url, {
+    headers: {
+      authorization: 'Bearer ' + config.token,
+      accept: 'application/vnd.github+json',
+      'x-github-api-version': '2022-11-28',
+      'user-agent': 'IRS-Cloudflare-Pages-readiness',
+    },
+    redirect: 'error',
+    signal: AbortSignal.timeout(Math.min(15000, remaining)),
+  });
+  if (!response.ok) {
+    await response.body?.cancel();
+    const error = new Error('GitHub checks API returned HTTP ' + response.status);
+    error.retryable = response.status === 429 || response.status >= 500;
+    throw error;
   }
-  throw new Error('Cloudflare deployment pagination limit reached without exhausting history');
+  let body;
+  try { body = await response.json(); } catch {
+    throw new Error('GitHub checks API returned invalid JSON');
+  }
+  if (!Number.isInteger(body?.total_count) || !Array.isArray(body.check_runs) ||
+      body.total_count !== body.check_runs.length || body.total_count > 100) {
+    throw new Error('GitHub checks API returned incomplete or invalid check-run data');
+  }
+  return body.check_runs.filter((run) => run?.name === config.checkName && run?.app?.slug === config.appSlug);
 }
 
-export function selectDeployment(deployments, config) {
-  const production = deployments.filter((item) => item.environment === 'production');
-  for (const item of production) {
-    if (item.project_name !== config.projectName || !item.deployment_trigger?.metadata?.branch || !Number.isFinite(Date.parse(item.created_on))) {
-      throw new Error('Production deployment has missing or mismatched identity metadata');
+export function selectDeploymentCheck(checkRuns, config) {
+  const matches = checkRuns.filter((run) => run?.name === config.checkName && run?.app?.slug === config.appSlug);
+  for (const run of matches) {
+    if (run.head_sha?.toLowerCase() !== config.commitSha || !Number.isSafeInteger(run.id) || run.id <= 0 ||
+        !Number.isFinite(Date.parse(run.created_at)) || !['queued', 'in_progress', 'completed'].includes(run.status)) {
+      throw new Error('Cloudflare Pages check has invalid or mismatched identity metadata');
     }
   }
-  production.sort((a, b) => Date.parse(b.created_on) - Date.parse(a.created_on));
-  const newest = production[0];
+  matches.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const newest = matches[0];
   if (!newest) return null;
-  if (production[1] && Date.parse(production[1].created_on) === Date.parse(newest.created_on)) throw new Error('Ambiguous newest production deployment');
-  const metadata = newest.deployment_trigger.metadata;
-  return metadata.branch === 'main' && typeof metadata.commit_hash === 'string' && SHA.test(metadata.commit_hash)
-    && metadata.commit_hash.toLowerCase() === config.commitSha ? newest : null;
+  if (matches[1] && Date.parse(matches[1].created_at) === Date.parse(newest.created_at)) {
+    throw new Error('Ambiguous newest Cloudflare Pages check');
+  }
+  const detailsUrl = newest.details_url || newest.html_url || null;
+  if (detailsUrl) {
+    let parsed;
+    try { parsed = new URL(detailsUrl); } catch {
+      throw new Error('Cloudflare Pages check has an invalid details URL');
+    }
+    if (parsed.protocol !== 'https:' ||
+        !['dash.cloudflare.com', 'github.com'].includes(parsed.hostname)) {
+      throw new Error('Cloudflare Pages check has an untrusted details URL');
+    }
+  }
+  if (newest.status !== 'completed') {
+    return { state: 'pending', checkRunId: newest.id, detailsUrl, createdAt: newest.created_at };
+  }
+  if (newest.conclusion === 'success') {
+    return { state: 'success', checkRunId: newest.id, detailsUrl, createdAt: newest.created_at };
+  }
+  if (typeof newest.conclusion !== 'string' || !newest.conclusion) {
+    throw new Error('Completed Cloudflare Pages check has no conclusion');
+  }
+  return {
+    state: 'failed',
+    checkRunId: newest.id,
+    detailsUrl,
+    createdAt: newest.created_at,
+    conclusion: newest.conclusion,
+  };
 }
 
 export async function watchDeployment(config, deps = {}) {
@@ -103,16 +108,25 @@ export async function watchDeployment(config, deps = {}) {
   const wait = deps.sleep || sleep;
   const deadline = now() + config.budgetMs;
   for (let attempt = 1; attempt <= config.maxAttempts; attempt += 1) {
-    const item = selectDeployment(await listDeployments(config, { ...deps, deadline }), config);
-    const stage = item?.latest_stage;
-    if (item && (item.is_skipped || ['failure', 'failed', 'error', 'cancelled', 'canceled', 'skipped'].includes(stage?.status))) {
-      return { status: 'failed', deploymentId: item.id, stage: stage?.name, lastStatus: stage?.status, attempts: attempt };
+    let checks;
+    try {
+      checks = await listDeploymentChecks(config, { ...deps, deadline });
+    } catch (error) {
+      const retryable = error.retryable || ['TimeoutError', 'AbortError', 'TypeError'].includes(error.name);
+      if (!retryable) throw error;
+      if (attempt === config.maxAttempts || now() + config.pollMs >= deadline) break;
+      await wait(config.pollMs);
+      continue;
     }
-    if (item && stage?.name === 'deploy' && stage.status === 'success') {
-      return { status: 'success', deploymentId: item.id, stage: stage.name, lastStatus: stage.status, attempts: attempt };
+    const selected = selectDeploymentCheck(checks, config);
+    if (selected?.state === 'success') {
+      return { status: 'success', checkRunId: selected.checkRunId, detailsUrl: selected.detailsUrl, createdAt: selected.createdAt, attempts: attempt };
+    }
+    if (selected?.state === 'failed') {
+      return { status: 'failed', checkRunId: selected.checkRunId, detailsUrl: selected.detailsUrl, createdAt: selected.createdAt, conclusion: selected.conclusion, attempts: attempt };
     }
     if (attempt === config.maxAttempts || now() + config.pollMs >= deadline) break;
     await wait(config.pollMs);
   }
-  return { status: 'timeout', deploymentId: null };
+  return { status: 'timeout', checkRunId: null };
 }
