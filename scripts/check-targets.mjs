@@ -105,6 +105,38 @@ function readPreviousStatus() {
   }
 }
 
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const MAX_REDIRECTS = 5;
+
+export async function fetchAuthorisedTarget(target, init, fetchImpl = fetch) {
+  let current = new URL(target).toString();
+  for (let redirects = 0; ; redirects += 1) {
+    if (!isAuthorisedUrl(current)) {
+      return { response: null, finalUrl: null, error: 'unauthorised-redirect-host' };
+    }
+    const response = await fetchImpl(current, { ...init, redirect: 'manual' });
+    if (!REDIRECT_STATUSES.has(response.status)) {
+      return { response, finalUrl: current, error: null };
+    }
+
+    const location = response.headers.get('location');
+    await response.body?.cancel().catch(() => {});
+    if (!location) return { response: null, finalUrl: null, error: 'redirect-location-missing' };
+    if (redirects >= MAX_REDIRECTS) return { response: null, finalUrl: null, error: 'too-many-redirects' };
+
+    let next;
+    try {
+      next = new URL(location, current).toString();
+    } catch {
+      return { response: null, finalUrl: null, error: 'invalid-redirect-location' };
+    }
+    if (!isAuthorisedUrl(next)) {
+      return { response: null, finalUrl: null, error: 'unauthorised-redirect-host' };
+    }
+    current = next;
+  }
+}
+
 async function probe(source, target) {
   if (!isAuthorisedUrl(target)) {
     return { source, ok: false, status: null, reason: 'unauthorised-configured-target', latencyMs: 0 };
@@ -113,19 +145,25 @@ async function probe(source, target) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const startedAt = Date.now();
   try {
-    const response = await fetch(target, {
+    const fetched = await fetchAuthorisedTarget(target, {
       method: 'GET',
-      redirect: 'follow',
       headers: {
         Accept: 'image/avif,image/webp,image/png,image/jpeg,image/gif,image/svg+xml,image/*;q=0.8,*/*;q=0.1',
         Range: `bytes=0-${signatureBytes - 1}`,
       },
       signal: controller.signal,
     });
+    if (fetched.error) {
+      return {
+        source, target, ok: false, status: null, reason: fetched.error,
+        finalHostAuthorised: false, latencyMs: Date.now() - startedAt,
+      };
+    }
+    const { response, finalUrl } = fetched;
     const contentType = response.headers.get('content-type') || '';
     const contentLength = declaredLength(response);
     const prefix = response.ok || response.status === 206 ? await readPrefix(response) : new Uint8Array();
-    const finalHostAuthorised = isAuthorisedUrl(response.url);
+    const finalHostAuthorised = isAuthorisedUrl(finalUrl);
     const imageContentType = isImageContentType(contentType);
     const nonEmpty = contentLength === null ? prefix.length > 0 : contentLength > 0;
     const validSignature = looksLikeImage(prefix, contentType);
@@ -140,7 +178,7 @@ async function probe(source, target) {
       target,
       ok,
       status: response.status,
-      finalUrl: finalHostAuthorised ? response.url : null,
+      finalUrl: finalHostAuthorised ? finalUrl : null,
       finalHostAuthorised,
       contentType,
       contentLength,
