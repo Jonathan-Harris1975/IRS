@@ -5,15 +5,19 @@ New repository/environment secrets required by this CI update: NONE.
 
 The new security workflow uses GitHub's automatically provided GITHUB_TOKEN for OpenSSF Scorecard. Do not create a PAT for Scorecard.
 
-Existing IRS secrets used by pre-existing workflows are unchanged and are not introduced by this CI update:
+Existing IRS secrets used by workflows are:
 - OPS_ALERT_WEBHOOK_URL
 - OPS_ALERT_WEBHOOK_TOKEN
-- CF_ACCOUNT_ID
-- CF_PAGES_PROJECT_NAME
-- CF_PAGES_API_TOKEN
 - ECOSYSTEM_SMOKE_DISPATCH_TOKEN (optional cross-repository dispatch)
 
 New repository/environment variables required by this CI update: NONE.
+
+CLOUDFLARE PAGES DEPLOYMENT TRUST
+---------------------------------
+- Connect Cloudflare Pages to this GitHub repository using the Cloudflare GitHub App, limited to IRS, with `main` as the production branch.
+- The post-deployment gate reads the Cloudflare App's `Cloudflare Pages` check on the exact commit SHA using the automatically provided `GITHUB_TOKEN` with `checks:read` and `contents:read`.
+- No Cloudflare API token, account ID or project-name secret is required in GitHub Actions for deployment verification.
+- A missing or unsuccessful provider check blocks the exact-SHA attestation. Keep the separate live redirect-target audit enabled.
 
 DEPENDENCY / LOCKFILE POLICY
 ----------------------------
