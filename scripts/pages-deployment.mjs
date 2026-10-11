@@ -28,36 +28,61 @@ export function watchConfiguration(env) {
 }
 
 export async function listDeploymentChecks(config, deps = {}) {
-  const url = new URL(API_ROOT + '/repos/' + config.repository + '/commits/' + config.commitSha + '/check-runs');
-  url.searchParams.set('per_page', '100');
   const now = deps.now || Date.now;
-  const remaining = (deps.deadline ?? now() + config.budgetMs) - now();
-  if (remaining <= 0) throw new Error('GitHub deployment check deadline exceeded');
-  const response = await (deps.fetch || fetch)(url, {
-    headers: {
-      authorization: 'Bearer ' + config.token,
-      accept: 'application/vnd.github+json',
-      'x-github-api-version': '2022-11-28',
-      'user-agent': 'IRS-Cloudflare-Pages-readiness',
-    },
-    redirect: 'error',
-    signal: AbortSignal.timeout(Math.min(15000, remaining)),
-  });
-  if (!response.ok) {
-    await response.body?.cancel();
-    const error = new Error('GitHub checks API returned HTTP ' + response.status);
-    error.retryable = response.status === 429 || response.status >= 500;
-    throw error;
+  const deadline = deps.deadline ?? now() + config.budgetMs;
+  const runs = [];
+  const runIds = new Set();
+  let expectedTotal;
+
+  for (let page = 1; page <= 10; page += 1) {
+    const url = new URL(API_ROOT + '/repos/' + config.repository + '/commits/' + config.commitSha + '/check-runs');
+    url.searchParams.set('per_page', '100');
+    url.searchParams.set('page', String(page));
+    const remaining = deadline - now();
+    if (remaining <= 0) throw new Error('GitHub deployment check deadline exceeded');
+    const response = await (deps.fetch || fetch)(url, {
+      headers: {
+        authorization: 'Bearer ' + config.token,
+        accept: 'application/vnd.github+json',
+        'x-github-api-version': '2022-11-28',
+        'user-agent': 'IRS-Cloudflare-Pages-readiness',
+      },
+      redirect: 'error',
+      signal: AbortSignal.timeout(Math.min(15000, remaining)),
+    });
+    if (!response.ok) {
+      await response.body?.cancel();
+      const error = new Error('GitHub checks API returned HTTP ' + response.status);
+      error.retryable = response.status === 429 || response.status >= 500;
+      throw error;
+    }
+    let body;
+    try { body = await response.json(); } catch {
+      throw new Error('GitHub checks API returned invalid JSON');
+    }
+    if (!Number.isInteger(body?.total_count) || body.total_count < 0 ||
+        !Array.isArray(body.check_runs) || body.check_runs.length > 100) {
+      throw new Error('GitHub checks API returned incomplete or invalid check-run data');
+    }
+    if (expectedTotal === undefined) expectedTotal = body.total_count;
+    if (body.total_count !== expectedTotal || runs.length + body.check_runs.length > expectedTotal) {
+      throw new Error('GitHub checks API returned inconsistent paginated check-run data');
+    }
+    for (const run of body.check_runs) {
+      if (!Number.isSafeInteger(run?.id) || run.id <= 0 || runIds.has(run.id)) {
+        throw new Error('GitHub checks API returned duplicate or invalid check-run identity');
+      }
+      runIds.add(run.id);
+      runs.push(run);
+    }
+    if (runs.length === expectedTotal) {
+      return runs.filter((run) => run?.name === config.checkName && run?.app?.slug === config.appSlug);
+    }
+    if (body.check_runs.length === 0 || page === 10) {
+      throw new Error('GitHub checks API did not return all check-run pages');
+    }
   }
-  let body;
-  try { body = await response.json(); } catch {
-    throw new Error('GitHub checks API returned invalid JSON');
-  }
-  if (!Number.isInteger(body?.total_count) || !Array.isArray(body.check_runs) ||
-      body.total_count !== body.check_runs.length || body.total_count > 100) {
-    throw new Error('GitHub checks API returned incomplete or invalid check-run data');
-  }
-  return body.check_runs.filter((run) => run?.name === config.checkName && run?.app?.slug === config.appSlug);
+  throw new Error('GitHub checks API exceeded the safe 1,000-check-run limit');
 }
 
 export function selectDeploymentCheck(checkRuns, config) {
@@ -112,7 +137,11 @@ export async function watchDeployment(config, deps = {}) {
     try {
       checks = await listDeploymentChecks(config, { ...deps, deadline });
     } catch (error) {
-      const retryable = error.retryable || ['TimeoutError', 'AbortError', 'TypeError'].includes(error.name);
+      const retryable = error.retryable === true ||
+        ['TimeoutError', 'AbortError'].includes(error.name) ||
+        ['ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH',
+          'ETIMEDOUT', 'ECONNABORTED', 'UND_ERR_CONNECT_TIMEOUT',
+          'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_SOCKET'].includes(error.cause?.code || error.code);
       if (!retryable) throw error;
       if (attempt === config.maxAttempts || now() + config.pollMs >= deadline) break;
       await wait(config.pollMs);
