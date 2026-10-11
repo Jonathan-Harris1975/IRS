@@ -64,9 +64,9 @@ test('accepts only the Cloudflare app check with exact name and SHA', () => {
   const ignored = [
     check({ id: 124, app: { slug: 'github-actions' } }),
     check({ id: 125, name: 'Other check' }),
-    check({ id: 126, head_sha: 'b'.repeat(40) }),
   ];
   assert.equal(selectDeploymentCheck(ignored, config), null);
+  assert.throws(() => selectDeploymentCheck([check({ head_sha: 'b'.repeat(40) })], config), /identity/);
   assert.equal(selectDeploymentCheck([check()], config).state, 'success');
 });
 
