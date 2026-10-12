@@ -88,7 +88,7 @@ test('MAST OIDC dispatch uses only supported workflow_dispatch fields', () => {
 
 test('manual Pages verification is restricted to the default branch', () => {
   assert.match(workflow, /workflow_dispatch:/);
-  const condition = workflow.match(/jobs:\\n  watch:\\n    if:[\\s\\S]*?\\n    runs-on:/)?.[0] || '';
+  const condition = workflow.match(/jobs:\n  watch:\n    if:[\s\S]*?\n    runs-on:/)?.[0] || '';
   assert.match(
     condition,
     /github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/,
