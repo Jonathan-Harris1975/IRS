@@ -14,6 +14,7 @@ const config = {
   commitSha: sha,
   checkName: 'Cloudflare Pages',
   appSlug: 'cloudflare-workers-and-pages',
+  projectName: 'irs',
   maxAttempts: 2,
   pollMs: 5000,
   budgetMs: 30000,
@@ -26,7 +27,7 @@ const check = (overrides = {}) => ({
   status: 'completed',
   conclusion: 'success',
   started_at: '2026-10-10T00:00:00Z',
-  details_url: 'https://dash.cloudflare.com/account/pages/view/irs/deployment/123',
+  details_url: 'https://dash.cloudflare.com/?to=/account/pages/view/irs/123',
   ...overrides,
 });
 function fixture(responses) {
@@ -93,6 +94,15 @@ test('a newer in-progress check prevents stale success', async () => {
   assert.equal(selectDeploymentCheck([oldSuccess, newestPending], config).state, 'pending');
 });
 
+test('accepts only a check for the configured IRS Pages project', () => {
+  assert.throws(() => selectDeploymentCheck([
+    check({ details_url: 'https://dash.cloudflare.com/?to=/account/pages/view/another-project/123' }),
+  ], config), /expected IRS Pages project/);
+  assert.throws(() => selectDeploymentCheck([
+    check({ details_url: 'https://github.com/Jonathan-Harris1975/IRS/runs/123' }),
+  ], config), /expected IRS Pages project/);
+});
+
 test('a queued check without started_at remains pending instead of rejecting valid API data', () => {
   const oldSuccess = check({ id: 1, started_at: '2026-10-10T00:00:00Z' });
   const queued = check({ id: 2, status: 'queued', conclusion: null, started_at: null });
@@ -125,6 +135,22 @@ test('transient GitHub outages retry within the bounded watch window', async () 
   const mock = fixture([new Response(null, { status: 503 }), response([check()])]);
   assert.equal((await watchDeployment(config, mock)).status, 'success');
   assert.deepEqual(mock.waits, [5000]);
+});
+
+test('rate-limited 403 responses retry using Retry-After while permission denials do not', async () => {
+  const limited = fixture([
+    new Response(null, { status: 403, headers: { 'Retry-After': '5', 'X-RateLimit-Remaining': '0' } }),
+    response([check()]),
+  ]);
+  assert.equal((await watchDeployment(config, limited)).status, 'success');
+  assert.deepEqual(limited.waits, [5000]);
+
+  const primaryLimit = fixture([
+    new Response(null, { status: 403, headers: { 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': String(Math.floor(Date.now() / 1000) + 5) } }),
+    response([check()]),
+  ]);
+  assert.equal((await watchDeployment(config, primaryLimit)).status, 'success');
+  assert.equal(primaryLimit.calls.length, 2);
 });
 
 test('permission failures are surfaced without retry', async () => {
