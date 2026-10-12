@@ -544,6 +544,7 @@ class Recovery(unittest.TestCase):
         held["labels"] = [{"name": "autonomy:human-hold"}]
         with (
             patch.object(m.router, "all_pages", return_value=[]),
+            patch.object(m.router, "valid_kilo_webhook_url", return_value=True),
             patch.object(m.router, "pr_details", return_value=held),
             patch.object(m.router, "api", return_value={"sha": "b" * 40}) as api,
         ):
