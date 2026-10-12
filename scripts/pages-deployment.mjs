@@ -87,23 +87,32 @@ export async function listDeploymentChecks(config, deps = {}) {
 
 export function selectDeploymentCheck(checkRuns, config) {
   const matches = checkRuns.filter((run) => run?.name === config.checkName && run?.app?.slug === config.appSlug);
-  // Fail closed if any exact-name/app result has malformed identity metadata. This
-  // intentionally prevents falling back to an older success when the provider has
-  // returned a corrupt newer run; this can temporarily block releases until corrected.
+  // Fail closed if any exact-name/app result has malformed identity metadata.
+  // Check Run objects expose started_at (not created_at). Queued checks may not
+  // have started yet, so keep them pending instead of rejecting their metadata.
   for (const run of matches) {
+    const startedAt = run.started_at == null ? null : Date.parse(run.started_at);
     if (run.head_sha?.toLowerCase() !== config.commitSha || !Number.isSafeInteger(run.id) || run.id <= 0 ||
-        !Number.isFinite(Date.parse(run.created_at)) || !['queued', 'in_progress', 'completed'].includes(run.status)) {
+        !['queued', 'in_progress', 'completed'].includes(run.status) ||
+        (startedAt === null && run.status !== 'queued') ||
+        (startedAt !== null && !Number.isFinite(startedAt))) {
       throw new Error('Cloudflare Pages check has invalid or mismatched identity metadata');
     }
   }
-  matches.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const queued = matches.filter((run) => run.status === 'queued' && run.started_at == null);
+  if (queued.length) {
+    queued.sort((a, b) => b.id - a.id);
+    const newestQueued = queued[0];
+    const detailsUrl = newestQueued.details_url || newestQueued.html_url || null;
+    return { state: 'pending', checkRunId: newestQueued.id, detailsUrl, startedAt: null };
+  }
+  matches.sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at));
   const newest = matches[0];
   if (!newest) return null;
-  if (matches[1] && Date.parse(matches[1].created_at) === Date.parse(newest.created_at)) {
+  if (matches[1] && Date.parse(matches[1].started_at) === Date.parse(newest.started_at)) {
     throw new Error('Ambiguous newest Cloudflare Pages check');
   }
-  const detailsUrl = newest.details_url || newest.html_url || null;
-  if (detailsUrl) {
+  const detailsUrl = newest.details_url || newest.html_url || null;  if (detailsUrl) {
     let parsed;
     try { parsed = new URL(detailsUrl); } catch {
       throw new Error('Cloudflare Pages check has an invalid details URL');
@@ -114,10 +123,10 @@ export function selectDeploymentCheck(checkRuns, config) {
     }
   }
   if (newest.status !== 'completed') {
-    return { state: 'pending', checkRunId: newest.id, detailsUrl, createdAt: newest.created_at };
+    return { state: 'pending', checkRunId: newest.id, detailsUrl, startedAt: newest.started_at };
   }
   if (newest.conclusion === 'success') {
-    return { state: 'success', checkRunId: newest.id, detailsUrl, createdAt: newest.created_at };
+    return { state: 'success', checkRunId: newest.id, detailsUrl, startedAt: newest.started_at };
   }
   if (typeof newest.conclusion !== 'string' || !newest.conclusion) {
     throw new Error('Completed Cloudflare Pages check has no conclusion');
@@ -126,7 +135,7 @@ export function selectDeploymentCheck(checkRuns, config) {
     state: 'failed',
     checkRunId: newest.id,
     detailsUrl,
-    createdAt: newest.created_at,
+    startedAt: newest.started_at,
     conclusion: newest.conclusion,
   };
 }
@@ -152,10 +161,10 @@ export async function watchDeployment(config, deps = {}) {
     }
     const selected = selectDeploymentCheck(checks, config);
     if (selected?.state === 'success') {
-      return { status: 'success', checkRunId: selected.checkRunId, detailsUrl: selected.detailsUrl, createdAt: selected.createdAt, attempts: attempt };
+      return { status: 'success', checkRunId: selected.checkRunId, detailsUrl: selected.detailsUrl, startedAt: selected.startedAt, attempts: attempt };
     }
     if (selected?.state === 'failed') {
-      return { status: 'failed', checkRunId: selected.checkRunId, detailsUrl: selected.detailsUrl, createdAt: selected.createdAt, conclusion: selected.conclusion, attempts: attempt };
+      return { status: 'failed', checkRunId: selected.checkRunId, detailsUrl: selected.detailsUrl, startedAt: selected.startedAt, conclusion: selected.conclusion, attempts: attempt };
     }
     if (attempt === config.maxAttempts || now() + config.pollMs >= deadline) break;
     await wait(config.pollMs);
