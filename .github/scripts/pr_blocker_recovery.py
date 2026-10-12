@@ -130,6 +130,14 @@ def verified_receipts(comments, sha, base_sha):
     return receipts
 
 
+def has_unresolved_repair_handoff(comments, sha):
+    prefix = f"<!-- kilo-auto-repair:{sha}:"
+    return any(
+        prefix in (comment.get("body") or "")
+        and "dispatch-state: rejected-http-" not in (comment.get("body") or "")
+        for comment in comments
+    )
+
 def recover(number):
     pr = router.pr_details(number)
     if not pr or {x.get("name") for x in pr.get("labels", [])} & HOLD_LABELS:
@@ -138,6 +146,9 @@ def recover(number):
         "GET", f"/repos/{router.REPO}/commits/{router.urllib.parse.quote(router.DEFAULT, safe='')}"
     )["sha"]
     sha = pr["head"]["sha"]
+    comments = router.all_pages(f"/repos/{router.REPO}/issues/{number}/comments")
+    if has_unresolved_repair_handoff(comments, sha):
+        return {"pr": number, "state": "repair-handoff-pending", "head": sha}
     if pr.get("mergeable") is False or pr.get("mergeable_state") == "dirty":
         # Include base SHA in the deduplication identity: a later base change is
         # a new conflict, rather than a lifetime two-attempt limit for this PR.
@@ -166,7 +177,6 @@ def recover(number):
         if t["comments"]["nodes"]
         and login(t["comments"]["nodes"][0].get("author", {}).get("login")) in repair_reviewers
     ]
-    comments = router.all_pages(f"/repos/{router.REPO}/issues/{number}/comments")
     receipts = verified_receipts(comments, sha, base)
     resolved = []
     checks_pass = required_checks_pass(pr)
