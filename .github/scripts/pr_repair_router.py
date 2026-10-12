@@ -216,7 +216,7 @@ def dispatch(pr: dict, kind: str, findings: list[str]) -> str:
         return 'already-requested'
     if matching_markers:
         print(f"PR #{number} has an explicit rejected handoff; a bounded retry is eligible.")
-    if sum(f":{kind} -->" in c["body"] for c in markers) >= 2:
+    if sum(f":{kind} -->" in c["body"] and "dispatch-state: accepted" in c["body"] for c in markers) >= 2:
         print(f"::warning::PR #{number} exhausted its two {kind} repair attempts; inspect the repair agent's results.")
         return 'attempt-limit'
     url = os.environ.get("KILO_REPAIR_TRIGGER_URL", "")
@@ -286,13 +286,21 @@ def dispatch(pr: dict, kind: str, findings: list[str]) -> str:
                 raise RuntimeError(f"Kilo trigger returned HTTP {response.status}")
     except urllib.error.HTTPError as exc:
         if 400 <= exc.code < 500:
-            try:
-                api("PATCH", f"/repos/{REPO}/issues/comments/{reservation_id}", {"body":
-                    f"{marker}\ndispatch-state: rejected-http-{exc.code}\n"
-                    f"Kilo explicitly rejected this repair handoff with HTTP {exc.code}; "
-                    "one bounded retry remains available after correcting or clearing the rejection."})
-            except Exception:
-                print("::warning::Kilo rejected the repair handoff, but its reservation could not be marked retryable; automatic retry remains suppressed.")
+            rejected_body = {"body":
+                f"{marker}\\ndispatch-state: rejected-http-{exc.code}\\n"
+                f"Kilo explicitly rejected this repair handoff with HTTP {exc.code}; "
+                "one bounded retry remains available after correcting or clearing the rejection."}
+            for patch_attempt in range(2):
+                try:
+                    api("PATCH", f"/repos/{REPO}/issues/comments/{reservation_id}", rejected_body)
+                    break
+                except Exception as patch_error:
+                    if patch_attempt == 1:
+                        print(
+                            "::warning::Kilo rejected the repair handoff, but both attempts to mark "
+                            "the reservation retryable failed; automatic retry remains suppressed "
+                            f"until this pending marker is inspected ({type(patch_error).__name__})."
+                        )
         raise RuntimeError(f"Kilo trigger returned HTTP {exc.code}") from None
     except urllib.error.URLError:
         # The provider may have accepted before the connection failed; keep the
