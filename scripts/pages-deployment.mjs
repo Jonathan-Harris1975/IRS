@@ -2,6 +2,7 @@ const SHA = /^[a-f0-9]{40}$/i;
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const CHECK_NAME = 'Cloudflare Pages';
 const APP_SLUG = 'cloudflare-workers-and-pages';
+const PROJECT_NAME = 'irs';
 const API_ROOT = 'https://api.github.com';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -21,6 +22,7 @@ export function watchConfiguration(env) {
     commitSha: read('GITHUB_SHA').toLowerCase(),
     checkName: CHECK_NAME,
     appSlug: APP_SLUG,
+    projectName: PROJECT_NAME,
     maxAttempts: integer('CF_DEPLOYMENT_MAX_ATTEMPTS', 40, 1, 70),
     pollMs: integer('CF_DEPLOYMENT_POLL_MS', 15000, 5000, 30000),
     budgetMs: integer('CF_DEPLOYMENT_BUDGET_MS', 1080000, 1000, 1080000),
@@ -53,7 +55,21 @@ export async function listDeploymentChecks(config, deps = {}) {
     if (!response.ok) {
       await response.body?.cancel();
       const error = new Error('GitHub checks API returned HTTP ' + response.status);
-      error.retryable = response.status === 429 || response.status >= 500;
+      const retryAfter = response.headers.get('retry-after');
+      const remaining = response.headers.get('x-ratelimit-remaining');
+      const reset = response.headers.get('x-ratelimit-reset');
+      let retryAfterMs = null;
+      if (retryAfter !== null) {
+        const seconds = Number(retryAfter);
+        const date = Date.parse(retryAfter);
+        if (Number.isFinite(seconds) && seconds >= 0) retryAfterMs = seconds * 1000;
+        else if (Number.isFinite(date)) retryAfterMs = Math.max(0, date - Date.now());
+      } else if (remaining === '0' && reset !== null && Number.isFinite(Number(reset))) {
+        retryAfterMs = Math.max(0, Number(reset) * 1000 - Date.now());
+      }
+      error.retryable = response.status === 429 || response.status >= 500 ||
+        (response.status === 403 && retryAfterMs !== null);
+      if (retryAfterMs !== null) error.retryAfterMs = retryAfterMs;
       throw error;
     }
     let body;
@@ -87,9 +103,9 @@ export async function listDeploymentChecks(config, deps = {}) {
 
 export function selectDeploymentCheck(checkRuns, config) {
   const matches = checkRuns.filter((run) => run?.name === config.checkName && run?.app?.slug === config.appSlug);
-  // Fail closed if any exact-name/app result has malformed identity metadata.
-  // Check Run objects expose started_at (not created_at). Queued checks may not
-  // have started yet, so keep them pending instead of rejecting their metadata.
+  // GitHub Check Run objects expose started_at, not created_at. A queued
+  // check may not have started yet, so retain it as pending.
+  const detailsUrls = new Map();
   for (const run of matches) {
     const startedAt = run.started_at == null ? null : Date.parse(run.started_at);
     if (run.head_sha?.toLowerCase() !== config.commitSha || !Number.isSafeInteger(run.id) || run.id <= 0 ||
@@ -98,6 +114,17 @@ export function selectDeploymentCheck(checkRuns, config) {
         (startedAt !== null && !Number.isFinite(startedAt))) {
       throw new Error('Cloudflare Pages check has invalid or mismatched identity metadata');
     }
+    let details;
+    try { details = new URL(run.details_url); } catch {
+      throw new Error('Cloudflare Pages check has an invalid details URL');
+    }
+    const dashboardPath = details.searchParams.get('to') || details.pathname;
+    const projectMatch = /^\\/[^/]+\\/pages\\/view\\/([^/]+)\\/[^/]+\\/?$/.exec(dashboardPath);
+    if (details.protocol !== 'https:' || details.hostname !== 'dash.cloudflare.com' ||
+        !projectMatch || projectMatch[1] !== config.projectName) {
+      throw new Error('Cloudflare Pages check does not identify the expected IRS Pages project');
+    }
+    detailsUrls.set(run.id, details.href);
   }
   const queued = matches.filter((run) => run.status === 'queued' && run.started_at == null);
   let newest;
@@ -112,17 +139,7 @@ export function selectDeploymentCheck(checkRuns, config) {
     }
   }
   if (!newest) return null;
-  const detailsUrl = newest.details_url || newest.html_url || null;  if (detailsUrl) {
-    let parsed;
-    try { parsed = new URL(detailsUrl); } catch {
-      throw new Error('Cloudflare Pages check has an invalid details URL');
-    }
-    if (parsed.protocol !== 'https:' ||
-        !['dash.cloudflare.com', 'github.com'].includes(parsed.hostname)) {
-      throw new Error('Cloudflare Pages check has an untrusted details URL');
-    }
-  }
-  if (newest.status !== 'completed') {
+  const detailsUrl = detailsUrls.get(newest.id);  if (newest.status !== 'completed') {
     return { state: 'pending', checkRunId: newest.id, detailsUrl, startedAt: newest.started_at };
   }
   if (newest.conclusion === 'success') {
@@ -155,8 +172,9 @@ export async function watchDeployment(config, deps = {}) {
           'ETIMEDOUT', 'ECONNABORTED', 'UND_ERR_CONNECT_TIMEOUT',
           'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_SOCKET'].includes(error.cause?.code || error.code);
       if (!retryable) throw error;
-      if (attempt === config.maxAttempts || now() + config.pollMs >= deadline) break;
-      await wait(config.pollMs);
+      const retryDelayMs = Math.max(config.pollMs, error.retryAfterMs || 0);
+      if (attempt === config.maxAttempts || now() + retryDelayMs >= deadline) break;
+      await wait(retryDelayMs);
       continue;
     }
     const selected = selectDeploymentCheck(checks, config);
