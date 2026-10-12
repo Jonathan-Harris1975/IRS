@@ -3,6 +3,9 @@ name: OIDC readiness
 on:
   push:
     branches: [main]
+  workflow_run:
+    workflows: ["Production verification"]
+    types: [completed]
   schedule:
     - cron: '40 0 * * 1' # weekly UTC, staggered across the estate
   workflow_dispatch:
@@ -13,7 +16,12 @@ permissions:
 jobs:
   github-oidc:
     name: GitHub OIDC claim verification
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name != 'workflow_run' ||
+       (github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
     permissions:
       contents: read
       id-token: write
