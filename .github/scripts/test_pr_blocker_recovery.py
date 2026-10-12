@@ -1,6 +1,6 @@
 """Behavioural blocker-recovery tests; all network calls are mocked."""
 
-from io import StringIO
+from io import BytesIO, StringIO
 import copy
 import json
 import os
@@ -568,8 +568,6 @@ class Recovery(unittest.TestCase):
         self.assertIn("::error::PR repair routing failed:", error_log.getvalue())
         self.assertNotIn("sentinel-secret", error_log.getvalue())
 
-
-
     def test_repair_handoff_allows_bounded_retry_after_explicit_rejection(self):
         comments = []
         events = []
@@ -591,7 +589,7 @@ class Recovery(unittest.TestCase):
         accepted = MagicMock()
         accepted.__enter__.return_value.status = 202
         rejected = m.router.urllib.error.HTTPError(
-            "https://example.invalid/repair", 429, "rate limited", {}, None
+            "https://example.invalid/repair", 429, "rate limited", {"Content-Type": "application/json"}, BytesIO(b"{}")
         )
         with (
             patch.object(m.router, "all_pages", side_effect=[[], comments]),
