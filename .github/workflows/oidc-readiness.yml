@@ -3,7 +3,7 @@ name: OIDC readiness
 on:
   push:
     branches: [main]
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] same-repository main-only OIDC verification gate
     workflows: ["Production verification"]
     types: [completed]
   schedule:
