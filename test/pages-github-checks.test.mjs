@@ -137,7 +137,7 @@ test('transient GitHub outages retry within the bounded watch window', async () 
   assert.deepEqual(mock.waits, [5000]);
 });
 
-test('rate-limited 403 responses retry using Retry-After while permission denials do not', async () => {
+test('rate-limited 403 responses retry from headers or the secondary-limit message', async () => {
   const limited = fixture([
     new Response(null, { status: 403, headers: { 'Retry-After': '5', 'X-RateLimit-Remaining': '0' } }),
     response([check()]),
@@ -151,6 +151,13 @@ test('rate-limited 403 responses retry using Retry-After while permission denial
   ]);
   assert.equal((await watchDeployment(config, primaryLimit)).status, 'success');
   assert.equal(primaryLimit.calls.length, 2);
+
+  const secondaryLimit = fixture([
+    Response.json({ message: 'You have exceeded a secondary rate limit. Please wait before you try again.' }, { status: 403 }),
+    response([check()]),
+  ]);
+  assert.equal((await watchDeployment({ ...config, budgetMs: 180000 }, secondaryLimit)).status, 'success');
+  assert.deepEqual(secondaryLimit.waits, [60000]);
 });
 
 test('permission failures are surfaced without retry', async () => {
