@@ -94,10 +94,16 @@ test('a newer in-progress check prevents stale success', async () => {
   assert.equal(selectDeploymentCheck([oldSuccess, newestPending], config).state, 'pending');
 });
 
-test('accepts only a check for the configured IRS Pages project', () => {
-  assert.throws(() => selectDeploymentCheck([
-    check({ details_url: 'https://dash.cloudflare.com/?to=/account/pages/view/another-project/123' }),
-  ], config), /expected IRS Pages project/);
+test('ignores other Cloudflare Pages projects and selects the configured IRS project', () => {
+  const otherProject = check({
+    id: 124,
+    details_url: 'https://dash.cloudflare.com/?to=/account/pages/view/another-project/456',
+  });
+  assert.equal(selectDeploymentCheck([otherProject], config), null);
+  assert.equal(
+    selectDeploymentCheck([otherProject, check()], config).checkRunId,
+    123,
+  );
   assert.throws(() => selectDeploymentCheck([
     check({ details_url: 'https://github.com/Jonathan-Harris1975/IRS/runs/123' }),
   ], config), /untrusted/);
