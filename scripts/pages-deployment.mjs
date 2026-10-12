@@ -119,7 +119,7 @@ export function selectDeploymentCheck(checkRuns, config) {
       throw new Error('Cloudflare Pages check has an invalid details URL');
     }
     const dashboardPath = details.searchParams.get('to') || details.pathname;
-    const projectMatch = /^\\/[^/]+\\/pages\\/view\\/([^/]+)\\/[^/]+\\/?$/.exec(dashboardPath);
+    const projectMatch = /^\/[^/]+\/pages\/view\/([^/]+)\/[^/]+\/?$/.exec(dashboardPath);
     if (details.protocol !== 'https:' || details.hostname !== 'dash.cloudflare.com' ||
         !projectMatch || projectMatch[1] !== config.projectName) {
       throw new Error('Cloudflare Pages check does not identify the expected IRS Pages project');
