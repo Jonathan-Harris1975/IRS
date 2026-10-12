@@ -53,19 +53,30 @@ export async function listDeploymentChecks(config, deps = {}) {
       signal: AbortSignal.timeout(Math.min(15000, remaining)),
     });
     if (!response.ok) {
-      await response.body?.cancel();
+      let message = '';
+      if (response.status === 403) {
+        try { message = String((await response.json())?.message || '').toLowerCase(); } catch {}
+      } else {
+        await response.body?.cancel();
+      }
       const error = new Error('GitHub checks API returned HTTP ' + response.status);
       const retryAfter = response.headers.get('retry-after');
       const remaining = response.headers.get('x-ratelimit-remaining');
       const reset = response.headers.get('x-ratelimit-reset');
+      const secondaryRateLimit = /secondary rate limit|abuse detection/.test(message);
       let retryAfterMs = null;
-      if (retryAfter !== null) {
+      if (retryAfter !== null && retryAfter.trim() !== '') {
         const seconds = Number(retryAfter);
         const date = Date.parse(retryAfter);
         if (Number.isFinite(seconds) && seconds >= 0) retryAfterMs = seconds * 1000;
         else if (Number.isFinite(date)) retryAfterMs = Math.max(0, date - Date.now());
-      } else if (remaining === '0' && reset !== null && Number.isFinite(Number(reset))) {
-        retryAfterMs = Math.max(0, Number(reset) * 1000 - Date.now());
+      } else if (remaining === '0') {
+        retryAfterMs = reset !== null && Number.isFinite(Number(reset))
+          ? Math.max(0, Number(reset) * 1000 - Date.now())
+          : 60000;
+      }
+      if (response.status === 403 && secondaryRateLimit && retryAfterMs === null) {
+        retryAfterMs = 60000;
       }
       error.retryable = response.status === 429 || response.status >= 500 ||
         (response.status === 403 && retryAfterMs !== null);
