@@ -100,7 +100,7 @@ test('accepts only a check for the configured IRS Pages project', () => {
   ], config), /expected IRS Pages project/);
   assert.throws(() => selectDeploymentCheck([
     check({ details_url: 'https://github.com/Jonathan-Harris1975/IRS/runs/123' }),
-  ], config), /expected IRS Pages project/);
+  ], config), /untrusted/);
 });
 
 test('a queued check without started_at remains pending instead of rejecting valid API data', () => {
