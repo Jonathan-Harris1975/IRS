@@ -15,7 +15,7 @@ New repository/environment variables required by this CI update: NONE.
 CLOUDFLARE PAGES DEPLOYMENT TRUST
 ---------------------------------
 - Connect Cloudflare Pages to this GitHub repository using the Cloudflare GitHub App, limited to IRS, with `main` as the production branch.
-- The post-deployment gate reads the Cloudflare App's `Cloudflare Pages` check on the exact commit SHA using the automatically provided `GITHUB_TOKEN` with `checks:read` and `contents:read`.
+- The post-deployment gate reads the Cloudflare App's `Cloudflare Pages` check on the exact commit SHA using the automatically provided `GITHUB_TOKEN` with `checks:read` and `contents:read`. The watcher also verifies the Cloudflare dashboard URL identifies the expected Pages project, `irs`.
 - No Cloudflare API token, account ID or project-name secret is required in GitHub Actions for deployment verification.
 - A missing or unsuccessful provider check blocks the exact-SHA attestation. Keep the separate live redirect-target audit enabled.
 
