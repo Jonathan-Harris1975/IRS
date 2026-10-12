@@ -100,18 +100,18 @@ export function selectDeploymentCheck(checkRuns, config) {
     }
   }
   const queued = matches.filter((run) => run.status === 'queued' && run.started_at == null);
+  let newest;
   if (queued.length) {
     queued.sort((a, b) => b.id - a.id);
-    const newestQueued = queued[0];
-    const detailsUrl = newestQueued.details_url || newestQueued.html_url || null;
-    return { state: 'pending', checkRunId: newestQueued.id, detailsUrl, startedAt: null };
+    newest = queued[0];
+  } else {
+    matches.sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at));
+    newest = matches[0];
+    if (newest && matches[1] && Date.parse(matches[1].started_at) === Date.parse(newest.started_at)) {
+      throw new Error('Ambiguous newest Cloudflare Pages check');
+    }
   }
-  matches.sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at));
-  const newest = matches[0];
   if (!newest) return null;
-  if (matches[1] && Date.parse(matches[1].started_at) === Date.parse(newest.started_at)) {
-    throw new Error('Ambiguous newest Cloudflare Pages check');
-  }
   const detailsUrl = newest.details_url || newest.html_url || null;  if (detailsUrl) {
     let parsed;
     try { parsed = new URL(detailsUrl); } catch {
