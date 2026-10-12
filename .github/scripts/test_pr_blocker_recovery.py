@@ -8,7 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("GITHUB_REPOSITORY", "owner/repo")
 os.environ.setdefault("GH_TOKEN", "test-token")
@@ -562,6 +562,47 @@ class Recovery(unittest.TestCase):
         self.assertIn("::error::PR repair routing failed:", error_log.getvalue())
         self.assertNotIn("sentinel-secret", error_log.getvalue())
 
+
+
+    def test_repair_handoff_allows_bounded_retry_after_explicit_rejection(self):
+        comments = []
+        events = []
+        def api(method, path, payload=None):
+            if method == "POST" and path.endswith("/comments"):
+                comments.append({"user": {"login": "github-actions[bot]"}, "body": payload["body"]})
+                events.append("reserve")
+                return {"id": len(comments)}
+            if method == "PATCH" and path.endswith("/issues/comments/1"):
+                comments[0]["body"] = payload["body"]
+                events.append("mark-rejected")
+                return {}
+            if method == "PATCH" and path.endswith("/issues/comments/2"):
+                comments[1]["body"] = payload["body"]
+                events.append("ack")
+                return {}
+            raise AssertionError((method, path, payload))
+
+        accepted = MagicMock()
+        accepted.__enter__.return_value.status = 202
+        rejected = m.router.urllib.error.HTTPError(
+            "https://example.invalid/repair", 429, "rate limited", {}, None
+        )
+        with (
+            patch.object(m.router, "all_pages", side_effect=[[], comments]),
+            patch.object(m.router, "api", side_effect=api),
+            patch.object(m.router, "valid_kilo_webhook_url", return_value=True),
+            patch.object(m.router, "machine_contract", return_value="machine contract"),
+            patch.object(m.router.urllib.request, "urlopen", side_effect=[rejected, accepted]),
+            patch.dict(os.environ, {"KILO_REPAIR_TRIGGER_URL": "https://example.invalid/repair"}),
+            patch("builtins.print"),
+        ):
+            with self.assertRaises(RuntimeError):
+                m.router.dispatch(self.pr, "review", ["finding"])
+            self.assertIn("dispatch-state: rejected-http-429", comments[0]["body"])
+            self.assertEqual(m.router.dispatch(self.pr, "review", ["finding"]), "requested")
+
+        self.assertEqual(events, ["reserve", "mark-rejected", "reserve", "ack"])
+        self.assertIn("dispatch-state: accepted", comments[1]["body"])
 
 if __name__ == "__main__":
     unittest.main()
