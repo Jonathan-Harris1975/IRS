@@ -113,11 +113,27 @@ export async function listDeploymentChecks(config, deps = {}) {
 }
 
 export function selectDeploymentCheck(checkRuns, config) {
-  const matches = checkRuns.filter((run) => run?.name === config.checkName && run?.app?.slug === config.appSlug);
+  const providerChecks = checkRuns.filter((run) => run?.name === config.checkName && run?.app?.slug === config.appSlug);
   // GitHub Check Run objects expose started_at, not created_at. A queued
-  // check may not have started yet, so retain it as pending.
+  // check may not have started yet, so retain it as pending. Cloudflare can
+  // emit same-named checks for several Pages projects on one repository;
+  // ignore well-formed checks for other projects before validating IRS runs.
+  const matches = [];
   const detailsUrls = new Map();
-  for (const run of matches) {
+  for (const run of providerChecks) {
+    let details;
+    try { details = new URL(run.details_url); } catch {
+      throw new Error('Cloudflare Pages check has an invalid details URL');
+    }
+    if (details.protocol !== 'https:' || details.hostname !== 'dash.cloudflare.com') {
+      throw new Error('Cloudflare Pages check has an untrusted details URL');
+    }
+    const dashboardPath = details.searchParams.get('to') || details.pathname;
+    const projectMatch = /^\\/[^/]+\\/pages\\/view\\/([^/]+)\\/[^/]+\\/?$/.exec(dashboardPath);
+    if (!projectMatch) {
+      throw new Error('Cloudflare Pages check has an invalid project URL');
+    }
+    if (projectMatch[1] !== config.projectName) continue;
     const startedAt = run.started_at == null ? null : Date.parse(run.started_at);
     if (run.head_sha?.toLowerCase() !== config.commitSha || !Number.isSafeInteger(run.id) || run.id <= 0 ||
         !['queued', 'in_progress', 'completed'].includes(run.status) ||
@@ -125,18 +141,7 @@ export function selectDeploymentCheck(checkRuns, config) {
         (startedAt !== null && !Number.isFinite(startedAt))) {
       throw new Error('Cloudflare Pages check has invalid or mismatched identity metadata');
     }
-    let details;
-    try { details = new URL(run.details_url); } catch {
-      throw new Error('Cloudflare Pages check has an invalid details URL');
-    }
-    const dashboardPath = details.searchParams.get('to') || details.pathname;
-    const projectMatch = /^\/[^/]+\/pages\/view\/([^/]+)\/[^/]+\/?$/.exec(dashboardPath);
-    if (details.protocol !== 'https:' || details.hostname !== 'dash.cloudflare.com') {
-      throw new Error('Cloudflare Pages check has an untrusted details URL');
-    }
-    if (!projectMatch || projectMatch[1] !== config.projectName) {
-      throw new Error('Cloudflare Pages check does not identify the expected IRS Pages project');
-    }
+    matches.push(run);
     detailsUrls.set(run.id, details.href);
   }
   const queued = matches.filter((run) => run.status === 'queued' && run.started_at == null);
