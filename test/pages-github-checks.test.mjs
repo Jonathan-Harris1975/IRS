@@ -25,7 +25,7 @@ const check = (overrides = {}) => ({
   head_sha: sha,
   status: 'completed',
   conclusion: 'success',
-  created_at: '2026-10-10T00:00:00Z',
+  started_at: '2026-10-10T00:00:00Z',
   details_url: 'https://dash.cloudflare.com/account/pages/view/irs/deployment/123',
   ...overrides,
 });
@@ -79,8 +79,8 @@ test('waits for a pending exact-SHA Cloudflare check and then succeeds', async (
 });
 
 test('a newer failing check prevents acceptance of an older success', async () => {
-  const oldSuccess = check({ id: 1, created_at: '2026-10-10T00:00:00Z' });
-  const newestFailure = check({ id: 2, conclusion: 'failure', created_at: '2026-10-11T00:00:00Z' });
+  const oldSuccess = check({ id: 1, started_at: '2026-10-10T00:00:00Z' });
+  const newestFailure = check({ id: 2, conclusion: 'failure', started_at: '2026-10-11T00:00:00Z' });
   assert.equal(selectDeploymentCheck([oldSuccess, newestFailure], config).state, 'failed');
   const mock = fixture([response([oldSuccess, newestFailure])]);
   assert.equal((await watchDeployment(config, mock)).status, 'failed');
@@ -88,9 +88,15 @@ test('a newer failing check prevents acceptance of an older success', async () =
 });
 
 test('a newer in-progress check prevents stale success', async () => {
-  const oldSuccess = check({ id: 1, created_at: '2026-10-10T00:00:00Z' });
-  const newestPending = check({ id: 2, status: 'queued', conclusion: null, created_at: '2026-10-11T00:00:00Z' });
+  const oldSuccess = check({ id: 1, started_at: '2026-10-10T00:00:00Z' });
+  const newestPending = check({ id: 2, status: 'queued', conclusion: null, started_at: '2026-10-11T00:00:00Z' });
   assert.equal(selectDeploymentCheck([oldSuccess, newestPending], config).state, 'pending');
+});
+
+test('a queued check without started_at remains pending instead of rejecting valid API data', () => {
+  const oldSuccess = check({ id: 1, started_at: '2026-10-10T00:00:00Z' });
+  const queued = check({ id: 2, status: 'queued', conclusion: null, started_at: null });
+  assert.equal(selectDeploymentCheck([oldSuccess, queued], config).state, 'pending');
 });
 
 test('ambiguous newest provider checks fail closed', () => {
