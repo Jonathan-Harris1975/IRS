@@ -7,6 +7,7 @@ const workflow = new URL("../.github/workflows/oidc-readiness.yml", import.meta.
 test("IRS refreshes OIDC evidence after trusted main verification completes", async () => {
   const source = await readFile(workflow, "utf8");
   const trigger = source.split("on:")[1].split("\npermissions:")[0];
+  assert.match(source, /workflow_run: # zizmor: ignore\\[dangerous-triggers\\]/);
   assert.match(trigger, /workflow_run:[\s\S]*workflows: \["Production verification"\][\s\S]*types: \[completed\]/);
   assert.match(source, /github\.event\.workflow_run\.event == 'push'/);
   assert.match(source, /github\.event\.workflow_run\.head_branch == 'main'/);
