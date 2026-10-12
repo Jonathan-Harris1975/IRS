@@ -84,3 +84,16 @@ test('MAST OIDC dispatch uses only supported workflow_dispatch fields', () => {
   assert.doesNotMatch(dispatch, /inputs:\s*\{/);
   assert.match(dispatch, /ECOSYSTEM_OIDC_WORKFLOW/);
 });
+
+
+test('manual Pages verification is restricted to the default branch', () => {
+  assert.match(workflow, /workflow_dispatch:/);
+  const condition = workflow.match(/jobs:\n  watch:\n    if:[\s\S]*?\n    runs-on:/)?.[0] || '';
+  assert.match(
+    condition,
+    /github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/,
+  );
+  assert.match(condition, /github\.event\.workflow_run\.event == 'push'/);
+  assert.match(condition, /github\.event\.workflow_run\.head_repository\.full_name == github\.repository/);
+});
+
