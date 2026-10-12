@@ -129,7 +129,7 @@ export function selectDeploymentCheck(checkRuns, config) {
       throw new Error('Cloudflare Pages check has an untrusted details URL');
     }
     const dashboardPath = details.searchParams.get('to') || details.pathname;
-    const projectMatch = /^\\/[^/]+\\/pages\\/view\\/([^/]+)\\/[^/]+\\/?$/.exec(dashboardPath);
+    const projectMatch = /^\/[^/]+\/pages\/view\/([^/]+)\/[^/]+\/?$/.exec(dashboardPath);
     if (!projectMatch) {
       throw new Error('Cloudflare Pages check has an invalid project URL');
     }
