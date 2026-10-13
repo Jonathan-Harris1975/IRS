@@ -12,6 +12,12 @@ class OpsNotifyHTTPErrorTests(unittest.TestCase):
     def test_http_error_logs_status_without_echoing_response_or_token(self):
         test_url = "https://example.com/events"
         test_token = "fake-unit-token"
+        environment = dict(
+            zip(
+                ("OPS_ALERT_WEBHOOK_URL", "OPS_ALERT_WEBHOOK_TOKEN"),
+                (test_url, test_token),
+            )
+        )
 
         for status in (400, 403, 404, 500, 503):
             with self.subTest(status=status):
@@ -31,13 +37,7 @@ class OpsNotifyHTTPErrorTests(unittest.TestCase):
                     raise error
 
                 with (
-                    patch.dict(
-                        os.environ,
-                        {
-                            "OPS_ALERT_WEBHOOK_URL": test_url,
-                            "OPS_ALERT_WEBHOOK_TOKEN": test_token,
-                        },
-                    ),
+                    patch.dict(os.environ, environment),
                     patch(
                         "ops_notify.urllib.request.urlopen",
                         side_effect=fail_with_http_error,
