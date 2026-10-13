@@ -32,6 +32,8 @@ jobs:
           test "$(node --version)" = "v24.21.0"
           test "$(npm --version)" = "10.9.9"
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test operational alert HTTP error handling
+        run: python3 -B -m unittest discover -s scripts -p 'test_ops_notify.py' -v
       - name: Run committed-secret and repository verification
         run: npm run verify
 
