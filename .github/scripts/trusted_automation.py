@@ -458,7 +458,7 @@ def current_head_unchanged(number: int, expected_sha: str) -> dict[str, Any] | N
     return current
 
 
-def admit_to_native_merge(number: int, expected_sha: str) -> None:
+def admit_to_mergify(number: int, expected_sha: str) -> None:
     pr = get(f"/repos/{REPO}/pulls/{number}")
     if pr.get("state") != "open":
         return
@@ -597,7 +597,7 @@ def _reconcile_pr_candidate(pr: dict[str, Any]) -> None:
 
     # Trusted admission adds eligibility metadata only. It does not approve or merge.
     # GitHub protections and GitHub native auto-merge remain responsible for review/merge decisions.
-    admit_to_native_merge(number, sha)
+    admit_to_mergify(number, sha)
 
 
 def reconcile_pr(pr: dict[str, Any]) -> None:
