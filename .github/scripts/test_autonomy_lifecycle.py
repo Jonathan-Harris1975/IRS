@@ -155,7 +155,7 @@ class ManagedBranchOwnershipTests(unittest.TestCase):
     def test_managed_branch_pr_is_admitted_to_mergify_after_green_checks(self):
         admit = self.enterContext(patch.object(automation, "admit_to_mergify"))
         self.enterContext(
-            patch.object(automation, "pr_files", return_value=["src/example.ts"])
+            patch.object(automation, "pr_files", return_value=["docs/runbook.md"])
         )
         self.enterContext(
             patch.object(
@@ -173,7 +173,7 @@ class ManagedBranchOwnershipTests(unittest.TestCase):
         admit.assert_called_once_with(22, self.sha)
 
     def test_managed_branch_pr_touching_governance_gets_human_hold(self):
-        hold = self.enterContext(patch.object(automation, "place_human_hold"))
+        hold = self.enterContext(patch.object(automation, "require_operator_risk_approval", return_value=True))
         admit = self.enterContext(patch.object(automation, "admit_to_mergify"))
         self.enterContext(
             patch.object(
@@ -228,7 +228,7 @@ class RenovateGovernanceTests(unittest.TestCase):
             patch.object(automation, "REPO", "owner/repo"),
             patch.object(automation, "DEFAULT_BRANCH", "main"),
             patch.object(automation, "pr_files", return_value=[".github/workflows/security.yml"]),
-            patch.object(automation, "place_human_hold") as hold,
+            patch.object(automation, "require_operator_risk_approval", return_value=True) as hold,
             patch.object(automation, "admit_to_mergify") as admit,
         ):
             automation.reconcile_pr(pr)
@@ -407,8 +407,7 @@ class OwnerCodexAdmissionTests(unittest.TestCase):
         with (
             patch.dict(os.environ, {"ADMISSION_TOKEN": "unit-test", "REPO": "owner/repo"}),
             patch.object(automation, "pr_files", return_value=[".github/workflows/ci.yml"]),
-            patch.object(automation, "has_current_approval", return_value=False, create=True),
-            patch.object(automation, "place_human_hold") as hold,
+            patch.object(automation, "require_operator_risk_approval", return_value=True) as hold,
             patch.object(automation, "admit_to_mergify") as admit,
             patch.object(automation, "set_admission_check"),
             patch.object(automation, "remove_label"),
@@ -456,6 +455,32 @@ class NativeAutoMergeCurrentLabelTests(unittest.TestCase):
             "labels": [
                 {"name": "autonomy:admitted"},
                 {"name": "autonomy:human-hold"},
+            ],
+        }
+        with (
+            patch.object(native_auto_merge, "merge_request", return_value=None),
+            patch.object(native_auto_merge, "request", return_value=detail),
+            patch.object(native_auto_merge, "admission_check", return_value=(True, True)),
+            patch.object(native_auto_merge, "enable") as enable,
+        ):
+            native_auto_merge.reconcile(summary)
+        enable.assert_not_called()
+
+    def test_risk_approval_label_blocks_auto_merge_enable(self):
+        summary = {
+            "number": 7,
+            "labels": [{"name": "autonomy:admitted"}],
+            "node_id": "PR_node_7",
+        }
+        detail = {
+            "state": "open",
+            "draft": False,
+            "base": {"ref": "main"},
+            "head": {"sha": "a" * 40},
+            "mergeable": True,
+            "labels": [
+                {"name": "autonomy:admitted"},
+                {"name": "autonomy:risk-approval-required"},
             ],
         }
         with (
@@ -544,6 +569,86 @@ class NativeAutoMergeCurrentLabelTests(unittest.TestCase):
             return_value={"allow_squash_merge": False, "allow_merge_commit": True, "allow_rebase_merge": True},
         ):
             self.assertEqual(native_auto_merge.merge_method(), "MERGE")
+
+
+class RiskApprovalPolicyTests(unittest.TestCase):
+    def setUp(self):
+        self.sha = "a" * 40
+        self.review_path = "/repos/owner/repo/pulls/42/reviews?per_page=100&page=1"
+        self.comments_path = "/repos/owner/repo/issues/42/comments?per_page=100&page=1"
+
+    def test_allowlist_is_narrow_and_unknown_or_security_paths_hold(self):
+        self.assertFalse(automation.sensitive_file("docs/runbook.md"))
+        with patch.object(automation, "REPO", "Jonathan-Harris1975/IRS"):
+            self.assertFalse(automation.sensitive_file("public/status.css"))
+        self.assertTrue(automation.sensitive_file(".github/workflows/ci.yml"))
+        self.assertTrue(automation.sensitive_file("unclassified/new-file.py"))
+
+    def test_recent_owner_review_for_exact_head_is_accepted(self):
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        with patch.object(automation, "REPO", "owner/repo"), patch.object(
+            automation, "get",
+            side_effect=[
+                [{"user": {"login": "owner"}, "state": "APPROVED", "commit_id": self.sha, "submitted_at": now}],
+                [],
+            ],
+        ):
+            self.assertTrue(automation.has_operator_risk_approval(42, self.sha))
+
+    def test_expired_or_wrong_head_owner_review_is_rejected(self):
+        from datetime import datetime, timedelta, timezone
+        old = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
+        for commit_id, submitted_at in ((self.sha, old), ("b" * 40, datetime.now(timezone.utc).isoformat())):
+            with self.subTest(commit_id=commit_id, submitted_at=submitted_at), patch.object(
+                automation, "REPO", "owner/repo"
+            ), patch.object(
+                automation, "get",
+                side_effect=[
+                    [{"user": {"login": "owner"}, "state": "APPROVED", "commit_id": commit_id, "submitted_at": submitted_at}],
+                    [],
+                ],
+            ):
+                self.assertFalse(automation.has_operator_risk_approval(42, self.sha))
+
+    def test_unapproved_risky_pr_loses_admission_and_is_held(self):
+        pr = {
+            "number": 42,
+            "head": {"sha": self.sha},
+            "labels": [{"name": "autonomy:admitted"}],
+        }
+        with (
+            patch.object(automation, "REPO", "owner/repo"),
+            patch.object(automation, "has_operator_risk_approval", return_value=False),
+            patch.object(automation, "add_labels") as add,
+            patch.object(automation, "remove_label") as remove,
+            patch.object(automation, "comment"),
+            patch.object(automation, "log"),
+        ):
+            held = automation.require_operator_risk_approval(
+                pr, [".github/workflows/ci.yml"], "managed branch"
+            )
+        self.assertTrue(held)
+        add.assert_called_once_with(42, [automation.RISK_APPROVAL_LABEL])
+        remove.assert_called_once_with(42, "autonomy:admitted")
+
+
+
+    def test_exact_head_approval_comment_expires_after_seven_days(self):
+        from datetime import datetime, timedelta, timezone
+        fresh = datetime.now(timezone.utc).isoformat()
+        stale = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
+        for timestamp, expected in ((fresh, True), (stale, False)):
+            with self.subTest(timestamp=timestamp), patch.object(
+                automation, "REPO", "owner/repo"
+            ), patch.object(
+                automation, "get",
+                side_effect=[
+                    [],
+                    [{"user": {"login": "owner"}, "body": f"/risk-approve {self.sha}", "created_at": timestamp}],
+                ],
+            ):
+                self.assertEqual(automation.has_operator_risk_approval(42, self.sha), expected)
 
 
 if __name__ == "__main__":
