@@ -188,6 +188,8 @@ class ManagedBranchOwnershipTests(unittest.TestCase):
         admit.assert_not_called()
         risk_label.assert_called_once_with(self.pr["number"], [automation.RISK_APPROVAL_LABEL])
 
+class KiloPolicyTests(unittest.TestCase):
+    @classmethod
     def setUpClass(cls):
         root = Path(__file__).resolve().parents[2]
         cls.policy = json.loads((root / "kilo.jsonc").read_text(encoding="utf-8"))
