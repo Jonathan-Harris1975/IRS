@@ -466,6 +466,32 @@ class NativeAutoMergeCurrentLabelTests(unittest.TestCase):
             native_auto_merge.reconcile(summary)
         enable.assert_not_called()
 
+    def test_risk_approval_label_blocks_auto_merge_enable(self):
+        summary = {
+            "number": 7,
+            "labels": [{"name": "autonomy:admitted"}],
+            "node_id": "PR_node_7",
+        }
+        detail = {
+            "state": "open",
+            "draft": False,
+            "base": {"ref": "main"},
+            "head": {"sha": "a" * 40},
+            "mergeable": True,
+            "labels": [
+                {"name": "autonomy:admitted"},
+                {"name": "autonomy:risk-approval-required"},
+            ],
+        }
+        with (
+            patch.object(native_auto_merge, "merge_request", return_value=None),
+            patch.object(native_auto_merge, "request", return_value=detail),
+            patch.object(native_auto_merge, "admission_check", return_value=(True, True)),
+            patch.object(native_auto_merge, "enable") as enable,
+        ):
+            native_auto_merge.reconcile(summary)
+        enable.assert_not_called()
+
     def test_removed_admission_label_revokes_existing_auto_merge(self):
         summary = {
             "number": 7,
