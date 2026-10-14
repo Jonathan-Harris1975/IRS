@@ -422,7 +422,7 @@ class OwnerCodexAdmissionTests(unittest.TestCase):
 
         later_other_head_review = dict(owner_review, commit_id="b" * 40, state="CHANGES_REQUESTED")
         owner_comment = {
-            "body": f"/risk-approve {self.sha}",
+            "body": f"/risk-approve  {self.sha} ",
             "created_at": "2026-10-14T00:01:00Z",
             "user": {"login": "owner"},
         }
