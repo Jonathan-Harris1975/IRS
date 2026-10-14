@@ -2,7 +2,7 @@
 
 ## Routine path
 
-Routine low-risk automation is PR-only. Repository CI produces the stable `ci-gate` check. The trusted default-branch admission workflow independently verifies the exact PR head against **CI**, **CodeQL**, and **Security and repository quality** before adding `autonomy:admitted`. GitHub native auto-merge is enabled only after `ci-gate`, all other required checks, conflict-free non-draft state, resolved review threads and lifecycle-label policy pass. GitHub applies active rulesets before merging.
+Routine low-risk automation is PR-only. Repository CI produces the stable `ci-gate` check. The trusted default-branch admission workflow independently verifies the exact PR head against **CI**, **CodeQL**, and **Security and repository quality** before adding `autonomy:admitted`. GitHub native auto-merge is enabled after exact-head admission, a conflict-free non-draft state and lifecycle-label policy pass. GitHub waits to merge until `ci-gate`, all other required checks, review-thread requirements and active rulesets pass.
 
 The repository's deployment model is preserved. Post-merge verification uses GitHub Pages deployment watch plus target audit. Deployment success and application-health success remain distinct signals.
 
