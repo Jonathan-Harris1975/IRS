@@ -1,6 +1,6 @@
 # IRS controlled live-test readiness ledger
 
-Baseline: `Jonathan-Harris1975/IRS`, current main commit `1ddd891fc42ed3ddf093a7810b1c8707fc71b983`, inspected 2026-10-11 05:48 UTC. This includes Mergify queue freshness PR #121, redirect-hop security PR #119, and credentialed watcher hardening PR #118. Revalidate HEAD before any approval.
+Historical snapshot: `Jonathan-Harris1975/IRS`, main commit `1ddd891fc42ed3ddf093a7810b1c8707fc71b983`, inspected 2026-10-11 05:48 UTC. The Mergify queue references below describe that historical merge process; GitHub native auto-merge is the current routine path. Revalidate HEAD and current rulesets before any new verification.
 
 **Verdict: NOT READY.** This ledger distinguishes code inspection from executed evidence. Never treat skipped checks or an absent provider response as success.
 
