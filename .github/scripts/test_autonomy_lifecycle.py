@@ -139,7 +139,7 @@ class ManagedBranchOwnershipTests(unittest.TestCase):
             "body": "",
         }
         for name, value in {
-            "REPO": "owner/repo",
+            "REPO": "Jonathan-Harris1975/IRS",
             "REPAIR_APP_LOGIN": "repair[bot]",
             "DEFAULT_BRANCH": "main",
         }.items():
@@ -155,7 +155,7 @@ class ManagedBranchOwnershipTests(unittest.TestCase):
     def test_managed_branch_pr_is_admitted_to_mergify_after_green_checks(self):
         admit = self.enterContext(patch.object(automation, "admit_to_mergify"))
         self.enterContext(
-            patch.object(automation, "pr_files", return_value=["src/example.ts"])
+            patch.object(automation, "pr_files", return_value=["public/example.html"])
         )
         self.enterContext(
             patch.object(
@@ -182,6 +182,7 @@ class ManagedBranchOwnershipTests(unittest.TestCase):
                 return_value=[".github/workflows/security.yml"],
             )
         )
+        self.enterContext(patch.object(automation, "has_operator_risk_approval", return_value=False))
 
         automation.reconcile_pr(copy.deepcopy(self.pr))
 
@@ -228,6 +229,7 @@ class RenovateGovernanceTests(unittest.TestCase):
             patch.object(automation, "REPO", "owner/repo"),
             patch.object(automation, "DEFAULT_BRANCH", "main"),
             patch.object(automation, "pr_files", return_value=[".github/workflows/security.yml"]),
+            patch.object(automation, "has_operator_risk_approval", return_value=False),
             patch.object(automation, "place_human_hold") as hold,
             patch.object(automation, "admit_to_mergify") as admit,
         ):
