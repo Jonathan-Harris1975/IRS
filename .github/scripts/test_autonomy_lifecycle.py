@@ -173,6 +173,8 @@ class ManagedBranchOwnershipTests(unittest.TestCase):
         admit.assert_called_once_with(22, self.sha)
 
     def test_managed_branch_pr_touching_governance_gets_human_hold(self):
+        self.enterContext(patch.object(automation, "add_labels"))
+        self.enterContext(patch.object(automation, "comment"))
         hold = self.enterContext(patch.object(automation, "place_human_hold"))
         admit = self.enterContext(patch.object(automation, "admit_to_mergify"))
         self.enterContext(
@@ -218,6 +220,8 @@ class KiloPolicyTests(unittest.TestCase):
 
 class RenovateGovernanceTests(unittest.TestCase):
     def test_auto_eligible_renovate_governance_change_gets_hold(self):
+        self.enterContext(patch.object(automation, "add_labels"))
+        self.enterContext(patch.object(automation, "comment"))
         pr = {
             "number": 77, "state": "open", "draft": False,
             "title": "Update action", "user": {"login": "renovate[bot]"},
