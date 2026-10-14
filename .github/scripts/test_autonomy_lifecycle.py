@@ -132,7 +132,7 @@ class ManagedBranchOwnershipTests(unittest.TestCase):
             "head": {
                 "ref": "codex/requested-change",
                 "sha": self.sha,
-                "repo": {"full_name": "owner/repo"},
+                "repo": {"full_name": "Jonathan-Harris1975/IRS"},
             },
             "base": {"ref": "main"},
             "labels": [{"name": "automation:branch-pr"}],
