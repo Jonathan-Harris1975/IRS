@@ -718,6 +718,7 @@ def admit_to_mergify(number: int, expected_sha: str) -> None:
     labels = issue_labels(pr)
     blocking_labels = {
         "autonomy:human-hold",
+        RISK_APPROVAL_LABEL,
         "autonomy:council-freeze",
         "autonomy:superseded",
         "autonomy:obsolete",
