@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 import unittest
 import native_auto_merge
+import kilo_failure_classifier
 from unittest.mock import patch
 
 os.environ.setdefault("GH_TOKEN", "unit-test")
@@ -265,6 +266,39 @@ class ProductionGovernanceProtectionTests(unittest.TestCase):
         self.assertIn("dispatch-state: accepted", dispatch)
         self.assertIn("dispatch-state: rejected-http-$status", dispatch)
         self.assertIn('rejected_attempts" -ge 2', dispatch)
+
+    def test_main_repair_classifies_failed_steps_before_creating_or_dispatching(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / "workflows/autonomous-repair.yml").read_text(encoding="utf-8")
+        failure_gate = workflow.index('if [ "$RUN_CONCLUSION" != "failure" ]')
+        failed_steps = workflow.index('failed_steps="$(gh api', failure_gate)
+        classifier = workflow.index("python3 .github/scripts/kilo_failure_classifier.py", failed_steps)
+        carrier_search = workflow.index('existing=""', classifier)
+        self.assertLess(failure_gate, failed_steps)
+        self.assertLess(failed_steps, classifier)
+        self.assertLess(classifier, carrier_search)
+
+
+class KiloFailureClassificationTests(unittest.TestCase):
+    def test_only_repository_repairable_failed_steps_are_returned(self):
+        steps = [
+            "Run pytest",
+            "Run deployment smoke test",
+            "Run eslint lint",
+            "Build production bundle",
+            "Runner lost communication",
+            "Run CodeQL security analysis",
+        ]
+        self.assertEqual(
+            kilo_failure_classifier.repairable_failed_steps(steps),
+            ["Run pytest", "Build production bundle", "Run CodeQL security analysis"],
+        )
+
+    def test_unknown_failure_is_not_repairable(self):
+        self.assertEqual(
+            kilo_failure_classifier.repairable_failed_steps(["External service unavailable"]),
+            [],
+        )
 
 
 
