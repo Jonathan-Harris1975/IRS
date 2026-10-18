@@ -102,17 +102,6 @@ jobs:
     timeout-minutes: 15
     environment:
       name: R2
-    env:
-      # Environment variables are read directly at runtime; these aliases are
-      # only repository-scope fallbacks. Environment secrets take precedence
-      # over repository secrets through GitHub's secrets context.
-      R2_ENDPOINT_REPOSITORY: ${{ vars.CF_R2_ENDPOINT_URL || vars.R2_ENDPOINT_URL || vars.R2_ENDPOINT || '' }}
-      R2_ENDPOINT_SECRET: ${{ secrets.R2_ENDPOINT || secrets.CF_R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL || '' }}
-      R2_ACCOUNT_ID_REPOSITORY: ${{ vars.R2_ACCOUNT_ID || vars.CF_R2_ACCOUNT_ID || '' }}
-      R2_ACCOUNT_ID_SECRET: ${{ secrets.R2_ACCOUNT_ID || secrets.CF_R2_ACCOUNT_ID || '' }}
-      R2_ACCESS_KEY_ID_REPOSITORY: ${{ vars.R2_ACCESS_KEY_ID || vars.CF_R2_ACCESS_KEY_ID || '' }}
-      R2_ACCESS_KEY_ID_SECRET: ${{ secrets.R2_ACCESS_KEY_ID || secrets.CF_R2_ACCESS_KEY_ID || '' }}
-      R2_SECRET_ACCESS_KEY_SECRET: ${{ secrets.R2_SECRET_ACCESS_KEY || secrets.CF_R2_SECRET_ACCESS_KEY || '' }}
     steps:
       - name: Check out trusted evidence helper
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -142,15 +131,14 @@ jobs:
           account_id="${R2_ACCOUNT_ID_SECRET:-${R2_ACCOUNT_ID_REPOSITORY:-}}"
           endpoint="${R2_ENDPOINT_SECRET:-${R2_ENDPOINT_REPOSITORY:-}}"
           access_key="${R2_ACCESS_KEY_ID_SECRET:-${R2_ACCESS_KEY_ID_REPOSITORY:-}}"
-          secret_key="${R2_SECRET_ACCESS_KEY_SECRET:-}"
           if [[ -z "$endpoint" && -n "$account_id" ]]; then
             endpoint="https://${account_id}.r2.cloudflarestorage.com"
           fi
           [[ -n "$endpoint" ]] || { echo "::error::R2 endpoint or account ID is required at Environment or repository scope."; exit 1; }
           [[ -n "$access_key" ]] || { echo "::error::R2 access key ID is required at Environment or repository scope."; exit 1; }
-          [[ -n "$secret_key" ]] || { echo "::error::R2 secret access key is required as a GitHub secret."; exit 1; }
+          [[ -n "${R2_SECRET_ACCESS_KEY_SECRET:-}" ]] || { echo "::error::R2 secret access key is required as a GitHub secret."; exit 1; }
           printf 'R2_ENDPOINT=%s\nR2_ACCESS_KEY_ID=%s\nR2_SECRET_ACCESS_KEY=%s\n' \
-            "$endpoint" "$access_key" "$secret_key" >> "$GITHUB_ENV"
+            "$endpoint" "$access_key" "$R2_SECRET_ACCESS_KEY_SECRET" >> "$GITHUB_ENV"
 
       - name: Persist and verify DAST evidence in hive-repositories
         env:
