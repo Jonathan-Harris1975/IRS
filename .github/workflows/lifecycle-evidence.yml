@@ -2,7 +2,23 @@ name: HIVE lifecycle evidence
 
 on:
   workflow_run: # zizmor: ignore[dangerous-triggers] reads trusted workflow metadata; no PR code is checked out or run
-    workflows: ["*"]
+    workflows:
+      - "autofix.ci"
+      - "Autonomous main-branch repair PR"
+      - "Branch PR signal"
+      - "Production verification"
+      - "CodeQL"
+      - "Persist completed Council report to R2"
+      - "Repository Council"
+      - "DAST penetration test"
+      - "Item 6 hardening"
+      - "OIDC readiness"
+      - "IRS Cloudflare Pages deployment watch"
+      - "Autonomous PR issue repair"
+      - "Security and repository quality"
+      - "IRS scheduled target audit"
+      - "Trusted automation and native auto-merge"
+      - "Weekend CI phase launcher"
     types: [completed]
   workflow_dispatch:
 
