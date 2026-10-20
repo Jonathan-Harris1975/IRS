@@ -61,6 +61,6 @@ test('static liveness remains independent from target-audit status', () => {
 test('weekend CI launcher can dispatch Production verification', () => {
   const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
   const launcher = fs.readFileSync('.github/workflows/weekend-phase-launcher.yml', 'utf8');
-  assert.match(workflow, /on:\\s*[\\s\\S]*?workflow_dispatch:/);
-  assert.match(launcher, /ci\\) workflow="ci\\.yml"/);
+  assert.ok(workflow.includes('workflow_dispatch:'));
+  assert.ok(launcher.includes('ci) workflow="ci.yml"'));
 });
