@@ -57,3 +57,10 @@ test('static liveness remains independent from target-audit status', () => {
   assert.equal('targetAudit' in health, false);
   assert.equal(fs.existsSync('public/irs-target-status.json'), false);
 });
+
+test('weekend CI launcher can dispatch Production verification', () => {
+  const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
+  const launcher = fs.readFileSync('.github/workflows/weekend-phase-launcher.yml', 'utf8');
+  assert.match(workflow, /on:\\s*[\\s\\S]*?workflow_dispatch:/);
+  assert.match(launcher, /ci\\) workflow="ci\\.yml"/);
+});
