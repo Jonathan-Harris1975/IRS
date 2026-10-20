@@ -7,6 +7,7 @@ on:
       - "Production verification"
       - "CodeQL"
       - "Security and repository quality"
+      - "IRS Cloudflare Pages deployment watch"
     types: [completed]
   workflow_dispatch:
 
@@ -29,7 +30,7 @@ jobs:
            ((github.event.workflow_run.event == 'workflow_dispatch' &&
              github.event.workflow_run.name == 'Repository Council') ||
             (github.event.workflow_run.event == 'push' &&
-             contains(fromJSON('["Production verification","CodeQL","Security and repository quality"]'), github.event.workflow_run.name)))) }}
+             contains(fromJSON('["Production verification","CodeQL","Security and repository quality","IRS Cloudflare Pages deployment watch"]'), github.event.workflow_run.name)))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
