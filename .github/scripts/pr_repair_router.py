@@ -297,6 +297,13 @@ def machine_contract() -> str:
     return text
 
 
+def trigger_secret_for(kind: str) -> str:
+    """Route failed checks and branch-state repairs to Debug; keep review fixes on Code."""
+    if kind == "check" or kind.startswith(("merge-conflict-", "branch-behind-")):
+        return "KILO_DEBUG_TRIGGER_URL"
+    return "KILO_REPAIR_TRIGGER_URL"
+
+
 def dispatch(pr: dict, kind: str, findings: list[str]) -> str:
     number, sha = pr["number"], pr["head"]["sha"]
     marker = f"<!-- kilo-auto-repair:{sha}:{kind} -->"
@@ -312,9 +319,10 @@ def dispatch(pr: dict, kind: str, findings: list[str]) -> str:
     if sum(f":{kind} -->" in c["body"] and "dispatch-state: accepted" in c["body"] for c in markers) >= 2:
         print(f"::warning::PR #{number} exhausted its two {kind} repair attempts; inspect the repair agent's results.")
         return 'attempt-limit'
-    url = os.environ.get("KILO_REPAIR_TRIGGER_URL", "")
+    trigger_secret = trigger_secret_for(kind)
+    url = os.environ.get(trigger_secret, "")
     if not valid_kilo_webhook_url(url):
-        raise RuntimeError("Configure KILO_REPAIR_TRIGGER_URL with this repository's Kilo Cloud Agent webhook trigger")
+        raise RuntimeError(f"Configure {trigger_secret} with this repository's Kilo Cloud Agent webhook trigger")
 
     source = pr["html_url"]
     existing_kilo_pr = pr.get("user", {}).get("login") == KILO_IMPLEMENTER
@@ -412,7 +420,7 @@ def dispatch(pr: dict, kind: str, findings: list[str]) -> str:
 def safe_route_error(exc: Exception) -> str:
     """Return actionable routing diagnostics without exposing the private webhook URL."""
     message = str(exc)
-    if message.startswith("Configure KILO_REPAIR_TRIGGER_URL with"):
+    if message.startswith(("Configure KILO_REPAIR_TRIGGER_URL with", "Configure KILO_DEBUG_TRIGGER_URL with")):
         return "Kilo webhook configuration is missing, unsupported or invalid"
     match = re.fullmatch(r"Kilo trigger returned HTTP ([0-9]{3})", message)
     if match:
