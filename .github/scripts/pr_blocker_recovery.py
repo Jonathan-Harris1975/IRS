@@ -266,10 +266,10 @@ def describe_error(exc):
             "http_status": exc.code,
             "guidance": "Check the recovery job's GitHub token permissions and repository access.",
         }
-    if message.startswith("Configure KILO_REPAIR_TRIGGER_URL with"):
+    if message.startswith(("Configure KILO_REPAIR_TRIGGER_URL with", "Configure KILO_DEBUG_TRIGGER_URL with")):
         return {
             "error_code": "repair-webhook-configuration",
-            "guidance": "Set KILO_REPAIR_TRIGGER_URL to this repository's supported Kilo Cloud Agent trigger URL.",
+            "guidance": "Set the required Kilo trigger URL (KILO_REPAIR_TRIGGER_URL or KILO_DEBUG_TRIGGER_URL) to this repository's supported Kilo Cloud Agent trigger URL.",
         }
     match = re.fullmatch(r"Kilo trigger returned HTTP ([0-9]{3})", message)
     if match:
