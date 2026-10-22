@@ -58,7 +58,7 @@ jobs:
             case "${SCHEDULE_EXPR}:${london_offset}" in
               "0 5 * * 6:+0100"|"0 6 * * 6:+0000")
                 phase="ci"; workflow="ci.yml" ;;
-              "0 15 1 * *:+0100"|"0 16 1 * *:+0000")
+              "17 15 1 * *:+0100"|"17 16 1 * *:+0000")
                 phase="dast"; workflow="dast.yml" ;;
               "0 5 * * 0:+0100"|"0 6 * * 0:+0000")
                 phase="council"; workflow="council.yml" ;;
@@ -98,6 +98,6 @@ jobs:
         if: always()
         run: |
           echo "CI: Sat 06:00–Sat 08:30"
-          echo "DAST: monthly on the 1st at 16:00 Europe/London"
+          echo "DAST: monthly on the 1st at 16:17 Europe/London"
           echo "Council: Sun 06:00–Sun 08:30"
           echo "Weekend operating envelope: Friday 20:00 to Monday 04:00 Europe/London"
