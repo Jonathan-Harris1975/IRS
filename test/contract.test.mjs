@@ -64,3 +64,28 @@ test('weekend CI launcher can dispatch Production verification', () => {
   assert.ok(workflow.includes('workflow_dispatch:'));
   assert.ok(launcher.includes('ci) workflow="ci.yml"'));
 });
+
+test('weekend launcher resolves every declared schedule expression', () => {
+  const launcher = fs.readFileSync('.github/workflows/weekend-phase-launcher.yml', 'utf8');
+  const crons = [...launcher.matchAll(/- cron: "([^"]+)"/g)].map((match) => match[1]);
+  assert.ok(crons.length > 0, 'launcher declares no scheduled expression');
+  const slots = [...launcher.matchAll(/"([^"]+:\+0[01]00)"(?:\s*\|\s*"([^"]+:\+0[01]00)")*\)\s*\n\s*phase="([a-z]+)"/g)];
+  assert.ok(slots.length > 0, 'launcher declares no phase slot');
+  const resolved = new Map();
+  for (const [, first, second, phase] of slots) {
+    for (const token of [first, second]) {
+      if (token) resolved.set(token, phase);
+    }
+  }
+  const phaseFor = new Map();
+  for (const cron of crons) {
+    const regimes = ['+0000', '+0100'].filter((offset) => resolved.has(`${cron}:${offset}`));
+    assert.equal(regimes.length, 1, `schedule ${cron} must resolve in exactly one Europe/London offset regime`);
+    phaseFor.set(cron, resolved.get(`${cron}:${regimes[0]}`));
+  }
+  const monthly = crons.filter((cron) => cron.split(' ')[2] === '1');
+  assert.equal(monthly.length, 2, 'expected two first-of-month DAST schedules');
+  for (const cron of monthly) {
+    assert.equal(phaseFor.get(cron), 'dast', `first-of-month schedule ${cron} must dispatch the DAST workflow`);
+  }
+});
