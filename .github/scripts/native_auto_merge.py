@@ -52,10 +52,22 @@ def request(method: str, path: str, data: dict[str, Any] | None = None) -> Any:
         raise RuntimeError(f"GitHub API HTTP {exc.code}: {message[:500]}") from exc
 
 
+class GitHubGraphQLError(RuntimeError):
+    def __init__(self, errors: list[dict[str, Any]]):
+        self.errors = errors
+        super().__init__(f"GitHub GraphQL error: {errors}")
+
+
+class GitHubGraphQLError(RuntimeError):
+    def __init__(self, errors: list[dict[str, Any]]):
+        self.errors = errors
+        super().__init__(f"GitHub GraphQL error: {errors}")
+
+
 def graphql(query: str, variables: dict[str, Any]) -> Any:
     result = request("POST", "https://api.github.com/graphql", {"query": query, "variables": variables})
     if result.get("errors"):
-        raise RuntimeError(f"GitHub GraphQL error: {result['errors']}")
+        raise GitHubGraphQLError(result["errors"])
     return result.get("data", {})
 
 
@@ -115,12 +127,40 @@ def merge_method() -> str:
     raise RuntimeError(f"Repository {REPO} allows no GitHub merge method")
 
 
-def enable(pr_node_id: str) -> None:
+def enable(pr_node_id: str) -> bool:
     method = merge_method()
-    graphql(
-        "mutation($id: ID!) { enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: " + method + "}) { pullRequest { number } } }",
-        {"id": pr_node_id},
-    )
+    try:
+        graphql(
+            "mutation($id: ID!) { enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: " + method + "}) { pullRequest { number } } }",
+            {"id": pr_node_id},
+        )
+    except Exception as exc:
+        # GitHub can briefly report an otherwise mergeable PR as unstable while
+        # required checks settle. Keep this controller check green and let a
+        # later workflow or scheduled reconciliation retry the native request.
+        # Prefer structured error fields over substring matching when available.
+        errors = getattr(exc, "errors", None)
+        if isinstance(errors, list):
+            for err in errors:
+                if not isinstance(err, dict):
+                    continue
+                ext = err.get("extensions") or {}
+                code = ext.get("code") or err.get("code")
+                typ = ext.get("type") or err.get("type")
+                if code in ("UNSTABLE_STATUS", "UNMERGEABLE_STATE") or typ in ("UNSTABLE_STATUS", "UNMERGEABLE_STATE"):
+                    print("GitHub reports an unstable PR status; deferring native auto-merge until a later reconciliation.")
+                    return False
+                message = str(err.get("message") or "")
+                if "in unstable status" in message.lower():
+                    print("GitHub reports an unstable PR status; deferring native auto-merge until a later reconciliation.")
+                    return False
+        message = str(exc)
+        if "in unstable status" in message.lower():
+            print("GitHub reports an unstable PR status; deferring native auto-merge until a later reconciliation.")
+            return False
+        print(f"Unexpected enablePullRequestAutoMerge error: {message}")
+        raise
+    return True
 
 
 def disable(pr_node_id: str) -> None:
@@ -164,8 +204,8 @@ def reconcile(pr_summary: dict[str, Any]) -> None:
 
     if eligible:
         if active_request is None:
-            enable(node_id)
-            print(f"Enabled GitHub native auto-merge for admitted PR #{number} at {sha}.")
+            if enable(node_id):
+                print(f"Enabled GitHub native auto-merge for admitted PR #{number} at {sha}.")
         return
 
     # Only cancel requests associated with an autonomy admission label or
