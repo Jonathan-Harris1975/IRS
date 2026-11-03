@@ -44,7 +44,7 @@ test('MAST-aware launcher exclusively schedules the Saturday IRS target audit', 
   assert.doesNotMatch(workflow, /schedule:/);
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(launcher, /workflows\+=\("codeql\.yml" "security\.yml" "target-audit\.yml" "item6-hardening\.yml"\)/);
-  assert.match(launcher, /"0 5 \* \* 6:\+0100"\|"0 6 \* \* 6:\+0000"\)[\s\S]*phase="ci"/);
+  assert.match(launcher, /"30 6 \* \* 6:\+0100"\|"30 7 \* \* 6:\+0000"\)[\s\S]*phase="ci"/);
   assert.match(workflow, /concurrency:[\s\S]*?group:\s*irs-scheduled-target-audit/);
   assert.match(workflow, /IRS_TARGET_TIMEOUT_MS:\s*['"]12000['"]/);
   assert.match(workflow, /IRS_TARGET_CONCURRENCY:\s*['"]4['"]/);
