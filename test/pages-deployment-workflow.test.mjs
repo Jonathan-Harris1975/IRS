@@ -44,17 +44,12 @@ test('target health cannot substitute for deployment verification', () => {
   assert.match(workflow, /run: npm run audit:targets/);
 });
 
-test('optional dispatch is downstream of retained mandatory evidence', () => {
-  const evidenceIndex = workflow.indexOf('- name: Upload redirect target audit');
-  const dispatchIndex = workflow.indexOf(
-    '- name: Trigger central ecosystem verification when cross-repository dispatch is configured',
-  );
-  assert.ok(evidenceIndex > 0 && dispatchIndex > evidenceIndex);
-  const dispatch = stepBody(
-    'Trigger central ecosystem verification when cross-repository dispatch is configured',
-  );
-  assert.match(dispatch, /exit 0/);
-  assert.match(dispatch, /cross-repository MAST OIDC verification dispatch was skipped/);
+test('Pages production verification has no dependency on the retired cross-repository token', () => {
+  assert.doesNotMatch(workflow, /ECOSYSTEM_OIDC_DISPATCH_TOKEN/);
+  assert.doesNotMatch(workflow, /Trigger central ecosystem verification/);
+  assert.match(workflow, /run: npm run watch:pages/);
+  assert.match(workflow, /run: npm run audit:targets/);
+  assert.match(workflow, /Record exact-SHA Pages deployment attestation/);
 });
 
 test('the deployment watch window covers slow Pages builds without exceeding the job timeout', () => {
@@ -76,13 +71,6 @@ test('the deployment watch window covers slow Pages builds without exceeding the
 test('automatic deployment watch only trusts completed main runs from this repository', () => {
   assert.match(workflow, /workflow_run\.head_branch == 'main'/);
   assert.match(workflow, /workflow_run\.head_repository\.full_name == github\.repository/);
-});
-
-test('MAST OIDC dispatch uses only supported workflow_dispatch fields', () => {
-  const dispatch = stepBody('Trigger central ecosystem verification when cross-repository dispatch is configured');
-  assert.match(dispatch, /payload='\{"ref":"main"\}'/);
-  assert.doesNotMatch(dispatch, /inputs:\s*\{/);
-  assert.match(dispatch, /ECOSYSTEM_OIDC_WORKFLOW/);
 });
 
 
