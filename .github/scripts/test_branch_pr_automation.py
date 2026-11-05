@@ -1,7 +1,7 @@
 """Regression tests for PR-only branch automation.
 
 The branch controller may create/reuse PRs and recover missed branch signals,
-but it must never review, approve, queue, auto-merge or merge them. Mergify is
+but it must never review, approve, queue, auto-merge or merge them. GitHub native auto-merge is
 the sole automated merge arbiter after trusted admission.
 """
 from __future__ import annotations
@@ -54,7 +54,7 @@ class BranchPrAutomationTests(unittest.TestCase):
             "autonomy/repair-1",
             "renovate/pkg",
             "dependabot/npm_and_yarn/x",
-            "mergify/queue",
+            "merge-queue",
             "codex/",
             "codex/a..b",
             "codex/a//b",
