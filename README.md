@@ -1,6 +1,6 @@
 # Image Redirect Service (IRS)
 
-IRS is the Cloudflare Pages redirect registry behind `images.jonathan-harris.online`. It gives published content stable branded image paths while the underlying assets live on explicitly authorised ImageKit hosts.
+IRS is the Cloudflare Pages redirect registry behind `images.jonathan-harris.online`. It gives published content stable branded image paths while the underlying assets live on explicitly authorised image hosts. ImageKit handles the standard image library; the podcast show-cover alias resolves to the canonical R2-backed cover used by the podcast RSS feed and website.
 
 ## Redirect model
 
@@ -12,7 +12,7 @@ IRS is a static service. Cloudflare Pages publishes `public/`; there is no appli
 - **Static liveness:** `GET /health.json`
 - **Runtime:** Cloudflare Pages
 
-Every redirect is an exact source path with a fixed HTTPS destination and permanent `301` status. The JSON registry and `_redirects` file must contain the same mappings. Validation rejects duplicate sources, dynamic wildcard/placeholder sources, non-HTTPS destinations, embedded URL credentials, unauthorised destination hosts, production-host loops and registry drift.
+Every redirect is an exact source path with a fixed HTTPS destination and permanent `301` status. The `/podcast-img` alias must match the podcast channel cover published at `https://podcast-coverart.jonathan-harris.online/cover-art.png`; it must not drift to an older ImageKit copy. Because 301 responses can be cached by clients, use the canonical URL directly for the show artwork in the RSS feed and website. The JSON registry and `_redirects` file must contain the same mappings. Validation rejects duplicate sources, dynamic wildcard/placeholder sources, non-HTTPS destinations, embedded URL credentials, unauthorised destination hosts, production-host loops and registry drift.
 
 The current rules do not use wildcard or placeholder path propagation. Fixed query strings already present on ImageKit destination URLs are part of the governed target. IRS does not use request query parameters as redirect match conditions.
 
