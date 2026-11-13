@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-const canonical = 'https://podcast-coverart.jonathan-harris.online/cover-art.png';
+const canonical = 'https://podcast-coverart.jonathan-harris.online/cover-art-2026-11-13-3000.png';
 
 test('podcast cover alias uses the same canonical cover as RSS and website', () => {
   const registry = JSON.parse(fs.readFileSync('data/image-url-map.json', 'utf8'));
