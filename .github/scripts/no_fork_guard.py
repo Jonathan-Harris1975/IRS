@@ -13,12 +13,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_EXTENSIONS = frozenset({'.py', '.js', '.cjs', '.mjs', '.ts', '.tsx', '.sh', '.bash', '.go', '.rb', '.ps1', '.yml', '.yaml'})
-IGNORED_DIRECTORIES = frozenset({'node_modules', '.venv', 'venv', 'vendor', 'coverage', 'dist', 'build', 'docs'})
+IGNORED_DIRECTORIES = frozenset({'node_modules', '.venv', 'venv', 'coverage', 'dist', 'docs'})
 SIGNATURES = (
     ('GitHub CLI fork command', re.compile(r'\bgh\s+repo\s+fork\b', re.I)),
     ('hub CLI fork command', re.compile(r'\bhub\s+fork\b', re.I)),
     ('GitHub SDK fork method', re.compile(r'\b(?:createFork|create_fork|fork_repository)\s*\(', re.I)),
-    ('GitHub REST fork POST', re.compile(r'\brequest\s*\(\s*["\']POST["\']\s*,\s*["\'][^"\']*/forks\b', re.I)),
+    ('GitHub REST fork POST', re.compile(r'\brequest\s*\(\s*(?:["\']POST["\']\s*,\s*["\'][^"\']*/forks\b|["\']POST\s+/[^"\']*/forks\b)', re.I)),
     ('GitHub REST fork POST helper', re.compile(r'\b[\w.]+\.post\s*\(\s*["\'][^"\']*/forks\b', re.I)),
     ('GitHub REST fork fetch', re.compile(r'\bfetch\s*\(\s*["\'][^"\']*/forks["\']\s*,\s*\{[^{}]{0,160}\bmethod\s*:\s*["\']POST["\']', re.I)),
 )
@@ -33,6 +33,7 @@ def find_signatures(content: str) -> list[tuple[int, str]]:
 
 
 def self_test() -> None:
+    # Split blocked examples across literals so the guard does not match its own fixtures.
     blocked = (
         'gh repo ' + 'fork Jonathan-Harris1975/AIMS',
         'hub ' + 'fork',
@@ -40,6 +41,7 @@ def self_test() -> None:
         'requests.' + 'post("https://api.github.com/repos/x/y/' + 'forks")',
         'session.' + 'post("https://api.github.com/repos/x/y/' + 'forks")',
         'request("POST", "/repos/x/y/' + 'forks")',
+        'request("POST /repos/x/y/' + 'forks")',
         'fetch("https://api.github.com/repos/x/y/' + 'forks", {method: "POST"})',
     )
     allowed = (
@@ -55,7 +57,7 @@ def self_test() -> None:
     for item in allowed:
         if find_signatures(item):
             raise AssertionError(f'Harmless operation unexpectedly blocked: {item}')
-    for name in ('test.py', 'test.js', 'test.ts', 'tests/test_guard.py', 'test/test_guard.py', 'fixtures/test_guard.py'):
+    for name in ('test.py', 'test.js', 'test.ts', 'tests/test_guard.py', 'test/test_guard.py', 'fixtures/test_guard.py', 'build/test.py', 'vendor/test.py'):
         if not should_scan_source(Path(name)):
             raise AssertionError(f'Test source unexpectedly excluded: {name}')
     if find_signatures(Path(__file__).read_text(encoding='utf-8')):
@@ -95,8 +97,8 @@ def main() -> int:
     for file in tracked_source_files():
         try:
             source = file.read_text(encoding='utf-8')
-        except UnicodeDecodeError:
-            continue
+        except UnicodeDecodeError as exc:
+            raise RuntimeError(f'Could not decode {file}; refusing to skip policy check') from exc
         except OSError as exc:
             raise RuntimeError(f'Could not inspect {file}; refusing to skip policy check') from exc
         for line, name in find_signatures(source):
