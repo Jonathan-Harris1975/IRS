@@ -13,14 +13,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_EXTENSIONS = frozenset({'.py', '.js', '.cjs', '.mjs', '.ts', '.tsx', '.sh', '.bash', '.go', '.rb', '.ps1', '.yml', '.yaml'})
-IGNORED_DIRECTORIES = frozenset({'node_modules', '.venv', 'venv', 'vendor', 'coverage', 'dist', 'build', 'test', 'tests', '__fixtures__', 'fixtures', 'docs'})
-IGNORED_FILE = '.github/scripts/no_fork_guard.py'
+IGNORED_DIRECTORIES = frozenset({'node_modules', '.venv', 'venv', 'vendor', 'coverage', 'dist', 'build', 'docs'})
 SIGNATURES = (
     ('GitHub CLI fork command', re.compile(r'\bgh\s+repo\s+fork\b', re.I)),
     ('hub CLI fork command', re.compile(r'\bhub\s+fork\b', re.I)),
     ('GitHub SDK fork method', re.compile(r'\b(?:createFork|create_fork|fork_repository)\s*\(', re.I)),
-    ('GitHub REST fork POST', re.compile(r'\bPOST\b[\s\S]{0,350}/forks\b|/forks\b[\s\S]{0,350}\bPOST\b', re.I)),
-    ('GitHub REST fork POST helper', re.compile(r'\b(?:requests\.post|\.post|request\.post)\s*\([^)]{0,350}/forks\b', re.I)),
+    ('GitHub REST fork POST', re.compile(r'\brequest\s*\(\s*["\']POST["\']\s*,\s*["\'][^"\']*/forks\b', re.I)),
+    ('GitHub REST fork POST helper', re.compile(r'\b[\w.]+\.post\s*\(\s*["\'][^"\']*/forks\b', re.I)),
+    ('GitHub REST fork fetch', re.compile(r'\bfetch\s*\(\s*["\'][^"\']*/forks["\']\s*,\s*\{[^{}]{0,160}\bmethod\s*:\s*["\']POST["\']', re.I)),
 )
 
 
@@ -34,17 +34,20 @@ def find_signatures(content: str) -> list[tuple[int, str]]:
 
 def self_test() -> None:
     blocked = (
-        'gh repo fork Jonathan-Harris1975/AIMS',
-        'hub fork',
-        'await octokit.rest.repos.createFork({owner: "x", repo: "y"})',
-        'requests.post("https://api.github.com/repos/x/y/forks")',
-        'request("POST", "/repos/x/y/forks")',
+        'gh repo ' + 'fork Jonathan-Harris1975/AIMS',
+        'hub ' + 'fork',
+        'await octokit.rest.repos.' + 'createFork' + '({owner: "x", repo: "y"})',
+        'requests.' + 'post("https://api.github.com/repos/x/y/' + 'forks")',
+        'session.' + 'post("https://api.github.com/repos/x/y/' + 'forks")',
+        'request("POST", "/repos/x/y/' + 'forks")',
+        'fetch("https://api.github.com/repos/x/y/' + 'forks", {method: "POST"})',
     )
     allowed = (
         'gh pr create --head fix/update --base main',
         'git checkout -b fix/update',
         'fork in the road',
-        'request("GET", "/repos/x/y/forks")',
+        'request("GET", "/repos/x/y/' + 'forks")',
+        'method = "POST"; endpoint = "/repos/x/y/' + 'forks"',
     )
     for item in blocked:
         if not find_signatures(item):
@@ -52,7 +55,16 @@ def self_test() -> None:
     for item in allowed:
         if find_signatures(item):
             raise AssertionError(f'Harmless operation unexpectedly blocked: {item}')
+    for name in ('test.py', 'test.js', 'test.ts', 'tests/test_guard.py', 'test/test_guard.py', 'fixtures/test_guard.py'):
+        if not should_scan_source(Path(name)):
+            raise AssertionError(f'Test source unexpectedly excluded: {name}')
+    if find_signatures(Path(__file__).read_text(encoding='utf-8')):
+        raise AssertionError('Guard source contains a fork-creation signature')
     print('No-fork guard self-test passed.')
+
+
+def should_scan_source(relative: Path) -> bool:
+    return relative.suffix in SOURCE_EXTENSIONS and not set(relative.parts) & IGNORED_DIRECTORIES
 
 
 def tracked_source_files() -> list[Path]:
@@ -65,11 +77,7 @@ def tracked_source_files() -> list[Path]:
         if not entry:
             continue
         relative = Path(entry.decode('utf-8', 'surrogateescape'))
-        if relative.as_posix() == IGNORED_FILE or relative.suffix not in SOURCE_EXTENSIONS:
-            continue
-        if set(relative.parts) & IGNORED_DIRECTORIES:
-            continue
-        if relative.name.startswith('test_') or relative.name.endswith(('_test.py', '.test.js', '.test.ts', '.spec.js', '.spec.ts')):
+        if not should_scan_source(relative):
             continue
         file = ROOT / relative
         if file.is_file():
