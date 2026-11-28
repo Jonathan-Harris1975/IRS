@@ -782,6 +782,106 @@ class DeterministicFailureRoutingTests(unittest.TestCase):
                 "Lint, type and security checks: Run ruff", "Setup and build: Run pytest"])
 
 
+class RoutineActionAdmissionTests(unittest.TestCase):
+    def test_action_pin_only_update_boundary(self):
+        from routine_action_admission import action_pin_updates
+        old = "      - uses: actions/setup-node@" + "a" * 40 + " # v7.0.0\n"
+        new = "      - uses: actions/setup-node@" + "b" * 40 + " # v7.1.0\n"
+        self.assertEqual(action_pin_updates(old, new), {("actions/setup-node", "v7.1.0", "b" * 40)})
+        for changed in (
+            new.replace("v7.1.0", "v8.0.0"),
+            new.replace("v7.1.0", "v6.9.0"),
+            new.replace("actions/setup-node", "other/setup-node"),
+            new.replace("b" * 40, "main"),
+            new + "      permissions: write-all\n",
+            new.replace("      - ", "        - "),
+        ):
+            self.assertIsNone(action_pin_updates(old, changed))
+
+    def test_wrong_or_unverified_upstream_tag_is_rejected(self):
+        from routine_action_admission import tag_matches
+        self.assertFalse(tag_matches(lambda _: {"object": {"type": "commit", "sha": "a" * 40}}, "actions/setup-node", "v7.1.0", "b" * 40))
+        self.assertTrue(tag_matches(lambda _: {"object": {"type": "commit", "sha": "b" * 40}}, "actions/setup-node", "v7.1.0", "b" * 40))
+
+    def test_non_renovate_or_non_workflow_never_fetches_evidence(self):
+        from routine_action_admission import verified_routine_action_update
+        repo = "owner/repo"
+        pr = {"number": 1, "state": "open", "user": {"login": "renovate[bot]"},
+              "labels": [{"name": "dependency:auto-eligible"}],
+              "head": {"sha": "b" * 40, "ref": "renovate/action", "repo": {"full_name": repo}},
+              "base": {"sha": "a" * 40, "ref": "main"}}
+        def no_api(_):
+            self.fail("Untrusted changes must not enter the routine lane")
+        self.assertFalse(verified_routine_action_update(pr, ["package.json"], no_api, repo, "main"))
+        pr["user"]["login"] = "untrusted-bot"
+        self.assertFalse(verified_routine_action_update(pr, [".github/workflows/ci.yml"], no_api, repo, "main"))
+
+
+class RoutineActionEvidenceTests(unittest.TestCase):
+    def test_complete_evidence_and_fail_closed_cases(self):
+        import base64
+        from routine_action_admission import verified_routine_action_update
+        repo = "owner/repo"
+        base, head = "a" * 40, "b" * 40
+        old_pin, new_pin = "c" * 40, "d" * 40
+        path = ".github/workflows/ci.yml"
+        pr = {"number": 1, "state": "open", "user": {"login": "renovate[bot]"},
+              "labels": [{"name": "dependency:auto-eligible"}],
+              "head": {"sha": head, "ref": "renovate/actions-setup-node-7.x",
+                       "repo": {"full_name": repo}},
+              "base": {"sha": base, "ref": "main"}}
+
+        def fixture():
+            prefix = f"/repos/{repo}"
+            result = {
+                f"{prefix}/compare/{base}...{head}": {
+                    "merge_base_commit": {"sha": base},
+                    "files": [{"filename": path, "status": "modified"}],
+                },
+                f"{prefix}/pulls/1": copy.deepcopy(pr),
+                "/repos/actions/setup-node/git/ref/tags/v7.1.0": {
+                    "object": {"type": "commit", "sha": new_pin},
+                },
+            }
+            for commit, name, pin, tag in ((base, "before", old_pin, "v7.0.0"),
+                                           (head, "after", new_pin, "v7.1.0")):
+                result[f"{prefix}/git/commits/{commit}"] = {"tree": {"sha": name + "-root"}}
+                result[f"{prefix}/git/trees/{name}-root"] = {
+                    "tree": [{"path": ".github", "type": "tree", "mode": "040000", "sha": name + "-gh"}]}
+                result[f"{prefix}/git/trees/{name}-gh"] = {
+                    "tree": [{"path": "workflows", "type": "tree", "mode": "040000", "sha": name + "-wf"}]}
+                result[f"{prefix}/git/trees/{name}-wf"] = {
+                    "tree": [{"path": "ci.yml", "type": "blob", "mode": "100644", "sha": name + "-blob"}]}
+                content = f"      - uses: actions/setup-node@{pin} # {tag}\n"
+                result[f"{prefix}/git/blobs/{name}-blob"] = {
+                    "encoding": "base64", "size": len(content),
+                    "content": base64.b64encode(content.encode()).decode()}
+            return result
+
+        evidence = fixture()
+        self.assertTrue(verified_routine_action_update(pr, [path], evidence.__getitem__, repo, "main"))
+        for reason in ("base moved", "extra file", "new tag mismatch", "hold", "symlink"):
+            evidence = fixture()
+            prefix = f"/repos/{repo}"
+            if reason == "base moved":
+                evidence[f"{prefix}/pulls/1"]["base"]["sha"] = "e" * 40
+            elif reason == "extra file":
+                evidence[f"{prefix}/compare/{base}...{head}"]["files"].append(
+                    {"filename": "package.json", "status": "modified"})
+            elif reason == "new tag mismatch":
+                evidence["/repos/actions/setup-node/git/ref/tags/v7.1.0"]["object"]["sha"] = old_pin
+            elif reason == "hold":
+                evidence[f"{prefix}/pulls/1"]["labels"].append({"name": "autonomy:human-hold"})
+            else:
+                evidence[f"{prefix}/git/trees/after-wf"]["tree"][0]["mode"] = "120000"
+            with self.subTest(reason=reason):
+                if reason == "symlink":
+                    with self.assertRaises(ValueError):
+                        verified_routine_action_update(pr, [path], evidence.__getitem__, repo, "main")
+                else:
+                    self.assertFalse(verified_routine_action_update(pr, [path], evidence.__getitem__, repo, "main"))
+
+
 if __name__ == "__main__":
     unittest.main()
 
