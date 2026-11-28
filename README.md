@@ -84,3 +84,15 @@ The live audit report is written to `reports/irs-target-audit.json`; the compact
 The Pages watcher and live target audit are separate mandatory controls: the watcher proves the expected source SHA reached production, while the target audit proves the authorised image destinations are healthy. Run `npm test` locally to execute the deterministic workflow contract checks; live provider verification remains in the authorised post-release workflow.
 
 Rollback and post-deployment checks are documented in [`docs/deployment-guide.md`](docs/deployment-guide.md). Security controls and the redirect trust boundary are documented in [`SECURITY.md`](SECURITY.md).
+
+## Repository repair and deployment safeguards
+
+The repository's governed PR repair router treats a Kilo webhook acceptance as a hand-off receipt, not evidence of a completed repair. It rechecks implementation evidence and permits bounded recovery after six hours without verified implementation, escalating when the two-attempt limit is exhausted. Repository forking requires explicit owner approval; do not create a fork as a workaround for missing permissions. The legacy OIDC readiness workflow has been removed. Use the current CI, target audit and Pages deployment-watch workflows for release evidence. See [branch/PR automation](docs/BRANCH_PR_AUTOMATION.md), [PR blocker recovery](docs/PR_BLOCKER_RECOVERY.md) and [deployment guide](docs/deployment-guide.md).
+
+## Consumers and change impact
+
+AIMS and the public website depend on stable image URLs; the public podcast feed and website must agree on the canonical versioned show cover. When a destination changes, reconcile the registry and redirect rule together, run local verification, check live target content and confirm the deployed redirect rather than relying on static liveness. A prior cached 301 can outlive a corrected deployment. Avoid adding wildcard redirects or weakening the allowlist to resolve a broken target.
+
+## Ecosystem integration and evidence
+
+The eight governed repositories are [HIVE](https://github.com/Jonathan-Harris1975/HIVE), [HIVE-UI](https://github.com/Jonathan-Harris1975/HIVE-UI), [AIMS](https://github.com/Jonathan-Harris1975/AIMS), [AIMS-UI](https://github.com/Jonathan-Harris1975/AIMS-UI), [MAST](https://github.com/Jonathan-Harris1975/MAST), [RAMS](https://github.com/Jonathan-Harris1975/RAMS), [IRS](https://github.com/Jonathan-Harris1975/IRS) and the [public website](https://github.com/Jonathan-Harris1975/jonathan-harris-website). MAST owns schedules; AIMS owns content and communications execution; HIVE and HIVE-UI provide governed intelligence and operator visibility; RAMS performs bounded remediation; IRS and the website own public delivery boundaries. Keep this README aligned with changes to those contracts. A merged change, a healthy HTTP process and verified live functional acceptance are separate evidence; preserve exact-SHA CI and deployment receipts and never report unverified provider delivery as success.
