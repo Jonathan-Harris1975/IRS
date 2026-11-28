@@ -146,7 +146,8 @@ def failed_run_steps(run_id: int) -> list[str]:
         for job in jobs:
             if job.get("conclusion") == "failure":
                 steps.extend(f"{job.get('name', 'job')}: {s.get('name', 'step')}"[:180]
-                             for s in job.get("steps", []) if s.get("conclusion") == "failure")
+                             for s in job.get("steps", []) if s.get("conclusion") == "failure"
+                             and repairable_failed_steps([str(s.get("name", ""))]))
         if len(jobs) < 100:
             return steps
     raise ValueError("Workflow has too many jobs to classify safely")
@@ -207,7 +208,8 @@ def extract(event: dict) -> tuple[dict, str, list[str]] | None:
         steps = failed_run_steps(int(run["id"]))
         if not steps:
             return None  # Runner/setup/transient failures have no verified repair target.
-        actionable = repairable_failed_steps(steps)
+        # Classify raw step names before adding the job context above.
+        actionable = steps
         if not actionable:
             print("No Kilo-repairable failed step was identified; leaving autofix/operations to handle it.")
             return None

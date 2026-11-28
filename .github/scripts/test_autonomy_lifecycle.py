@@ -300,7 +300,7 @@ class KiloFailureClassificationTests(unittest.TestCase):
         ]
         self.assertEqual(
             kilo_failure_classifier.repairable_failed_steps(steps),
-            ["Run pytest", "Build production bundle", "Run CodeQL security analysis"],
+            ["Run pytest", "Run eslint lint", "Build production bundle", "Run CodeQL security analysis"],
         )
 
     def test_unknown_failure_is_not_repairable(self):
@@ -751,6 +751,135 @@ class RiskApprovalPolicyTests(unittest.TestCase):
                 ],
             ):
                 self.assertEqual(automation.has_operator_risk_approval(42, self.sha), expected)
+
+
+class DeterministicFailureRoutingTests(unittest.TestCase):
+    def test_repository_defects_and_operational_failures_are_distinct(self):
+        from kilo_failure_classifier import repairable_failed_steps
+        code = ["Run ruff lint", "Run eslint lint", "Verify pinned Node/npm toolchain",
+                "Run pytest", "Build Cloudflare worker bundle", "Run CodeQL security analysis",
+                "Run actionlint", "Validate Renovate dependency config"]
+        operations = ["Set up Python", "Install dependencies", "Upload test artifact",
+                      "Runner lost communication", "Check account quota", "Mint deployment token",
+                      "autofix", "Wait for deployment", "External service unavailable"]
+        self.assertEqual(repairable_failed_steps(code + operations), code)
+
+    def test_job_context_does_not_suppress_or_create_repair(self):
+        import importlib
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "workflow_run",
+                                     "DEFAULT_BRANCH": "main", "GITHUB_REPOSITORY": "owner/repo",
+                                     "GH_TOKEN": "unit-test"}):
+            router = importlib.import_module("pr_repair_router")
+        jobs = [{"name": "Lint, type and security checks", "conclusion": "failure",
+                 "steps": [{"name": "Run ruff", "conclusion": "failure"},
+                           {"name": "Set up Python", "conclusion": "failure"}]},
+                {"name": "Setup and build", "conclusion": "failure",
+                 "steps": [{"name": "Run pytest", "conclusion": "failure"}]},
+                {"name": "Unit tests", "conclusion": "success",
+                 "steps": [{"name": "Run pytest", "conclusion": "failure"}]}]
+        with patch.object(router, "api", return_value={"jobs": jobs}):
+            self.assertEqual(router.failed_run_steps(17), [
+                "Lint, type and security checks: Run ruff", "Setup and build: Run pytest"])
+
+
+class RoutineActionAdmissionTests(unittest.TestCase):
+    def test_action_pin_only_update_boundary(self):
+        from routine_action_admission import action_pin_updates
+        old = "      - uses: actions/setup-node@" + "a" * 40 + " # v7.0.0\n"
+        new = "      - uses: actions/setup-node@" + "b" * 40 + " # v7.1.0\n"
+        self.assertEqual(action_pin_updates(old, new), {("actions/setup-node", "v7.1.0", "b" * 40)})
+        for changed in (
+            new.replace("v7.1.0", "v8.0.0"),
+            new.replace("v7.1.0", "v6.9.0"),
+            new.replace("actions/setup-node", "other/setup-node"),
+            new.replace("b" * 40, "main"),
+            new + "      permissions: write-all\n",
+            new.replace("      - ", "        - "),
+        ):
+            self.assertIsNone(action_pin_updates(old, changed))
+
+    def test_wrong_or_unverified_upstream_tag_is_rejected(self):
+        from routine_action_admission import tag_matches
+        self.assertFalse(tag_matches(lambda _: {"object": {"type": "commit", "sha": "a" * 40}}, "actions/setup-node", "v7.1.0", "b" * 40))
+        self.assertTrue(tag_matches(lambda _: {"object": {"type": "commit", "sha": "b" * 40}}, "actions/setup-node", "v7.1.0", "b" * 40))
+
+    def test_non_renovate_or_non_workflow_never_fetches_evidence(self):
+        from routine_action_admission import verified_routine_action_update
+        repo = "owner/repo"
+        pr = {"number": 1, "state": "open", "user": {"login": "renovate[bot]"},
+              "labels": [{"name": "dependency:auto-eligible"}],
+              "head": {"sha": "b" * 40, "ref": "renovate/action", "repo": {"full_name": repo}},
+              "base": {"sha": "a" * 40, "ref": "main"}}
+        def no_api(_):
+            self.fail("Untrusted changes must not enter the routine lane")
+        self.assertFalse(verified_routine_action_update(pr, ["package.json"], no_api, repo, "main"))
+        pr["user"]["login"] = "untrusted-bot"
+        self.assertFalse(verified_routine_action_update(pr, [".github/workflows/ci.yml"], no_api, repo, "main"))
+
+
+class RoutineActionEvidenceTests(unittest.TestCase):
+    def test_complete_evidence_and_fail_closed_cases(self):
+        import base64
+        from routine_action_admission import verified_routine_action_update
+        repo = "owner/repo"
+        base, head = "a" * 40, "b" * 40
+        old_pin, new_pin = "c" * 40, "d" * 40
+        path = ".github/workflows/ci.yml"
+        pr = {"number": 1, "state": "open", "user": {"login": "renovate[bot]"},
+              "labels": [{"name": "dependency:auto-eligible"}],
+              "head": {"sha": head, "ref": "renovate/actions-setup-node-7.x",
+                       "repo": {"full_name": repo}},
+              "base": {"sha": base, "ref": "main"}}
+
+        def fixture():
+            prefix = f"/repos/{repo}"
+            result = {
+                f"{prefix}/compare/{base}...{head}": {
+                    "merge_base_commit": {"sha": base},
+                    "files": [{"filename": path, "status": "modified"}],
+                },
+                f"{prefix}/pulls/1": copy.deepcopy(pr),
+                "/repos/actions/setup-node/git/ref/tags/v7.1.0": {
+                    "object": {"type": "commit", "sha": new_pin},
+                },
+            }
+            for commit, name, pin, tag in ((base, "before", old_pin, "v7.0.0"),
+                                           (head, "after", new_pin, "v7.1.0")):
+                result[f"{prefix}/git/commits/{commit}"] = {"tree": {"sha": name + "-root"}}
+                result[f"{prefix}/git/trees/{name}-root"] = {
+                    "tree": [{"path": ".github", "type": "tree", "mode": "040000", "sha": name + "-gh"}]}
+                result[f"{prefix}/git/trees/{name}-gh"] = {
+                    "tree": [{"path": "workflows", "type": "tree", "mode": "040000", "sha": name + "-wf"}]}
+                result[f"{prefix}/git/trees/{name}-wf"] = {
+                    "tree": [{"path": "ci.yml", "type": "blob", "mode": "100644", "sha": name + "-blob"}]}
+                content = f"      - uses: actions/setup-node@{pin} # {tag}\n"
+                result[f"{prefix}/git/blobs/{name}-blob"] = {
+                    "encoding": "base64", "size": len(content),
+                    "content": base64.b64encode(content.encode()).decode()}
+            return result
+
+        evidence = fixture()
+        self.assertTrue(verified_routine_action_update(pr, [path], evidence.__getitem__, repo, "main"))
+        for reason in ("base moved", "extra file", "new tag mismatch", "hold", "symlink"):
+            evidence = fixture()
+            prefix = f"/repos/{repo}"
+            if reason == "base moved":
+                evidence[f"{prefix}/pulls/1"]["base"]["sha"] = "e" * 40
+            elif reason == "extra file":
+                evidence[f"{prefix}/compare/{base}...{head}"]["files"].append(
+                    {"filename": "package.json", "status": "modified"})
+            elif reason == "new tag mismatch":
+                evidence["/repos/actions/setup-node/git/ref/tags/v7.1.0"]["object"]["sha"] = old_pin
+            elif reason == "hold":
+                evidence[f"{prefix}/pulls/1"]["labels"].append({"name": "autonomy:human-hold"})
+            else:
+                evidence[f"{prefix}/git/trees/after-wf"]["tree"][0]["mode"] = "120000"
+            with self.subTest(reason=reason):
+                if reason == "symlink":
+                    with self.assertRaises(ValueError):
+                        verified_routine_action_update(pr, [path], evidence.__getitem__, repo, "main")
+                else:
+                    self.assertFalse(verified_routine_action_update(pr, [path], evidence.__getitem__, repo, "main"))
 
 
 if __name__ == "__main__":

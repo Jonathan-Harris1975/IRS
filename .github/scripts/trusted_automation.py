@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from autonomy_admission_check import set_admission_check
+from routine_action_admission import verified_routine_action_update
 
 API = "https://api.github.com"
 TOKEN = os.environ["GH_TOKEN"]
@@ -639,6 +640,20 @@ def require_operator_risk_approval(pr: dict[str, Any], paths: list[str], kind: s
     sha = str(pr.get("head", {}).get("sha", ""))
     if not re.fullmatch(r"[0-9a-f]{40}", sha):
         raise RuntimeError(f"PR #{number} has no valid head SHA for risk approval")
+    # Only verified Renovate pin-only updates of selected official actions may
+    # use the routine maintenance lane. The policy and all other changes still
+    # require independent owner approval. Exact-head checks follow as before.
+    if kind == "renovate" and renovate_auto_eligible(pr):
+        try:
+            routine = verified_routine_action_update(pr, paths, get, REPO, DEFAULT_BRANCH)
+        except (ApiError, KeyError, ValueError, TypeError, StopIteration, OSError, AttributeError):
+            log(f"PR #{number}: routine action evidence unavailable; retaining owner-risk gate.")
+            routine = False
+        if routine:
+            if RISK_APPROVAL_LABEL in labels:
+                remove_label(number, RISK_APPROVAL_LABEL)
+            log(f"PR #{number}: verified routine official action update at {sha[:12]}; exact-head checks still required.")
+            return False
     if has_operator_risk_approval(number, sha):
         if RISK_APPROVAL_LABEL in labels:
             remove_label(number, RISK_APPROVAL_LABEL)
