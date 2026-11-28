@@ -300,7 +300,7 @@ class KiloFailureClassificationTests(unittest.TestCase):
         ]
         self.assertEqual(
             kilo_failure_classifier.repairable_failed_steps(steps),
-            ["Run pytest", "Build production bundle", "Run CodeQL security analysis"],
+            ["Run pytest", "Run eslint lint", "Build production bundle", "Run CodeQL security analysis"],
         )
 
     def test_unknown_failure_is_not_repairable(self):
@@ -751,6 +751,35 @@ class RiskApprovalPolicyTests(unittest.TestCase):
                 ],
             ):
                 self.assertEqual(automation.has_operator_risk_approval(42, self.sha), expected)
+
+
+class DeterministicFailureRoutingTests(unittest.TestCase):
+    def test_repository_defects_and_operational_failures_are_distinct(self):
+        from kilo_failure_classifier import repairable_failed_steps
+        code = ["Run ruff lint", "Run eslint lint", "Verify pinned Node/npm toolchain",
+                "Run pytest", "Build Cloudflare worker bundle", "Run CodeQL security analysis",
+                "Run actionlint", "Validate Renovate dependency config"]
+        operations = ["Set up Python", "Install dependencies", "Upload test artifact",
+                      "Runner lost communication", "Check account quota", "Mint deployment token",
+                      "autofix", "Wait for deployment", "External service unavailable"]
+        self.assertEqual(repairable_failed_steps(code + operations), code)
+
+    def test_job_context_does_not_suppress_or_create_repair(self):
+        import importlib
+        with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "workflow_run",
+                                     "DEFAULT_BRANCH": "main", "GITHUB_REPOSITORY": "owner/repo",
+                                     "GH_TOKEN": "unit-test"}):
+            router = importlib.import_module("pr_repair_router")
+        jobs = [{"name": "Lint, type and security checks", "conclusion": "failure",
+                 "steps": [{"name": "Run ruff", "conclusion": "failure"},
+                           {"name": "Set up Python", "conclusion": "failure"}]},
+                {"name": "Setup and build", "conclusion": "failure",
+                 "steps": [{"name": "Run pytest", "conclusion": "failure"}]},
+                {"name": "Unit tests", "conclusion": "success",
+                 "steps": [{"name": "Run pytest", "conclusion": "failure"}]}]
+        with patch.object(router, "api", return_value={"jobs": jobs}):
+            self.assertEqual(router.failed_run_steps(17), [
+                "Lint, type and security checks: Run ruff", "Setup and build: Run pytest"])
 
 
 if __name__ == "__main__":
