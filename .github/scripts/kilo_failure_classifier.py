@@ -32,7 +32,9 @@ DETERMINISTIC = re.compile(
 def is_repairable(step: str) -> bool:
     if EXTERNAL.search(step) or PLUMBING.search(step):
         return False
-    if PROVIDER.search(step) and not DETERMINISTIC.search(step):
+    if PROVIDER.search(step) and (
+        not DETERMINISTIC.search(step) or re.search(r"\b(?:smoke|live|readiness|health)\b", step, re.I)
+    ):
         return False
     return bool(ACTIONABLE_CHECK.search(step))
 
